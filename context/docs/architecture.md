@@ -1,0 +1,33 @@
+# Architecture Context
+
+Core flow:
+
+1. API or caller builds an `engine.Event`.
+2. `Router` dispatches by `Ticker`.
+3. One `BookWorker` owns one ticker's `OrderBook`.
+4. Worker handles new, cancel, and edit events sequentially.
+5. `Match` mutates the book and returns residual order plus raw match logs.
+6. `BookWorker` can pass raw logs to `internal/matchlog`.
+
+Key files:
+
+- `cmd/server/main.go` wires a sample router and worker.
+- `internal/engine/router.go` maps ticker symbols to workers.
+- `internal/engine/bookworker.go` owns event handling per ticker.
+- `internal/engine/order.go` owns order book mutation.
+- `internal/engine/match.go` owns execution logic.
+- `internal/matchlog` owns raw match log storage boundaries.
+- `asset/architecture.png` is the current diagram.
+
+Design constraints:
+
+- Keep `Router` unaware of matching details.
+- Keep `Match` unaware of DB details.
+- Keep `OrderBook` mostly lock-free; single ticker workers provide serialization.
+- Reuse existing domain names: `OrderBook`, `BookWorker`, `PriceLevel`, `Bid`, `Ask`.
+- Leave ETL, analytics DB, WebSocket streaming, and TimescaleDB-specific features outside this repo for now.
+
+Verify:
+
+- Use `go test ./...` for behavior changes.
+- Use file references only for explanation-only answers.
