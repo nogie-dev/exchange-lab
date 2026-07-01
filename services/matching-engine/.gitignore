@@ -1,0 +1,6 @@
+# Local build/test artifacts
+tmp/
+
+# Go build cache override (if placed elsewhere)
+*.test
+
