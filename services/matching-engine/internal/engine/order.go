@@ -3,8 +3,8 @@ package engine
 import (
 	"container/heap"
 	"container/list"
-	"fmt"
 	"log/slog"
+	"sort"
 	"time"
 
 	"github.com/nogie-dev/clob-trading/internal/models"
@@ -18,6 +18,27 @@ type OrderBook struct {
 	askLevels util.MinPriceHeap
 	Index     map[string]*list.Element
 	Ticker    string
+}
+
+type OrderBookSnapshot struct {
+	Ticker string           `json:"ticker"`
+	Bids   []OrderBookLevel `json:"bids"`
+	Asks   []OrderBookLevel `json:"asks"`
+}
+
+type OrderBookLevel struct {
+	Price            float64 `json:"price"`
+	Amount           float64 `json:"amount"`
+	CumulativeAmount float64 `json:"cumulativeAmount"`
+}
+
+// EditOrderResult captures the immutable state immediately before and after a
+// successful amendment. RequiresRematch is true when the amended order was
+// detached from the book because its price changed.
+type EditOrderResult struct {
+	Before          models.BookOrder
+	After           models.BookOrder
+	RequiresRematch bool
 }
 
 func NewOrderBook(ticker string) *OrderBook {
@@ -44,6 +65,10 @@ func (ob *OrderBook) side(order *models.BookOrder) (map[float64]*util.PriceLevel
 }
 
 func CreateOrder(req models.CreateOrderRequest) models.BookOrder {
+	return CreateOrderAt(req, time.Now())
+}
+
+func CreateOrderAt(req models.CreateOrderRequest, recordedAt time.Time) models.BookOrder {
 	return models.BookOrder{
 		OrderID:   util.GenerateOrderID(req),
 		Ticker:    req.Ticker,
@@ -53,7 +78,7 @@ func CreateOrder(req models.CreateOrderRequest) models.BookOrder {
 		Price:     req.Price,
 		Amount:    req.Amount,
 		Status:    models.Pending,
-		Timestamp: time.Now(),
+		Timestamp: recordedAt,
 		Nonce:     req.Nonce,
 	}
 }
@@ -95,26 +120,28 @@ func (ob *OrderBook) level(order *models.BookOrder) (*util.PriceLevel, map[float
 	return lvl, levels, h, true
 }
 
-func (ob *OrderBook) RemoveOrder(orderID string) {
+func (ob *OrderBook) RemoveOrder(orderID string) *models.BookOrder {
 	elem, ok := ob.Index[orderID]
 	if !ok || elem == nil {
 		slog.Warn("order not found in index", "orderID", orderID)
-		return
+		return nil
 	}
 
 	current, ok := elem.Value.(*models.BookOrder)
 	if !ok || current == nil {
 		slog.Error("order type mismatch", "orderID", orderID)
-		return
+		return nil
 	}
 
 	lvl, levels, h, ok := ob.level(current)
 	if !ok {
-		return
+		return nil
 	}
 
+	removed := *current
 	ob.removeElement(lvl, levels, h, elem, current.Amount)
 	logOrderCancelled(current)
+	return &removed
 }
 
 func (ob *OrderBook) removeElement(lvl *util.PriceLevel, levels map[float64]*util.PriceLevel, h heap.Interface, elem *list.Element, fallbackAmount float64) {
@@ -145,7 +172,11 @@ func (ob *OrderBook) removeElement(lvl *util.PriceLevel, levels map[float64]*uti
 	}
 }
 
-func (ob *OrderBook) EditOrder(req models.EditOrderRequest) *models.BookOrder {
+func (ob *OrderBook) EditOrder(req models.EditOrderRequest) *EditOrderResult {
+	return ob.EditOrderAt(req, time.Now())
+}
+
+func (ob *OrderBook) EditOrderAt(req models.EditOrderRequest, recordedAt time.Time) *EditOrderResult {
 	elem, ok := ob.Index[req.OrderID]
 	if !ok || elem == nil {
 		slog.Warn("order not found", "orderID", req.OrderID)
@@ -165,6 +196,10 @@ func (ob *OrderBook) EditOrder(req models.EditOrderRequest) *models.BookOrder {
 
 	priceChanged := existing.Price != req.Price
 	amountChanged := req.Amount != nil && *req.Amount != existing.Amount
+	if !priceChanged && !amountChanged {
+		return nil
+	}
+	before := *existing
 
 	if priceChanged {
 		// 기존 레벨에서 제거, 업데이트된 주문 반환 (매칭은 bookworker에서)
@@ -173,46 +208,68 @@ func (ob *OrderBook) EditOrder(req models.EditOrderRequest) *models.BookOrder {
 		if req.Amount != nil {
 			existing.Amount = *req.Amount
 		}
-		existing.Timestamp = time.Now()
+		existing.Timestamp = recordedAt
 		logOrderEdited(existing, "price_changed")
-		return existing
-	}
-
-	if amountChanged {
-		delta := *req.Amount - existing.Amount
-		if delta > 0 {
-			// 수량 증가: 우선순위 리셋을 위해 제거 후 재삽입
-			ob.removeElement(lvl, levels, h, elem, existing.Amount)
-			existing.Amount = *req.Amount
-			existing.Timestamp = time.Now()
-			ob.AddOrder(existing)
-			logOrderEdited(existing, "amount_increased")
-		} else {
-			// 수량 감소: 위치 유지, 누적만 반영
-			existing.Amount = *req.Amount
-			existing.Timestamp = time.Now()
-			lvl.TotalAmount += delta
-			logOrderEdited(existing, "amount_decreased")
+		return &EditOrderResult{
+			Before:          before,
+			After:           *existing,
+			RequiresRematch: true,
 		}
 	}
 
-	return nil
+	delta := *req.Amount - existing.Amount
+	if delta > 0 {
+		// 수량 증가: 우선순위 리셋을 위해 제거 후 재삽입
+		ob.removeElement(lvl, levels, h, elem, existing.Amount)
+		existing.Amount = *req.Amount
+		existing.Timestamp = recordedAt
+		ob.AddOrder(existing)
+		logOrderEdited(existing, "amount_increased")
+	} else {
+		// 수량 감소: 위치 유지, 누적만 반영
+		existing.Amount = *req.Amount
+		existing.Timestamp = recordedAt
+		lvl.TotalAmount += delta
+		logOrderEdited(existing, "amount_decreased")
+	}
+
+	return &EditOrderResult{Before: before, After: *existing}
 }
 
-func (ob *OrderBook) PrintOrderBook() {
-	bidHeap := append(util.MaxPriceHeap(nil), ob.bidLevels...)
-	heap.Init(&bidHeap)
-	for bidHeap.Len() > 0 {
-		lvl := heap.Pop(&bidHeap).(*util.PriceLevel)
-		fmt.Printf("BID price=%.4f total=%.4f\n", lvl.Price, lvl.TotalAmount)
+func (ob *OrderBook) Snapshot(depth int) OrderBookSnapshot {
+	return OrderBookSnapshot{
+		Ticker: ob.Ticker,
+		Bids:   snapshotLevels(ob.Bids, depth, true),
+		Asks:   snapshotLevels(ob.Asks, depth, false),
+	}
+}
+
+func snapshotLevels(levels map[float64]*util.PriceLevel, depth int, desc bool) []OrderBookLevel {
+	out := make([]OrderBookLevel, 0, len(levels))
+	for _, lvl := range levels {
+		out = append(out, OrderBookLevel{
+			Price:  lvl.Price,
+			Amount: lvl.TotalAmount,
+		})
 	}
 
-	askHeap := append(util.MinPriceHeap(nil), ob.askLevels...)
-	heap.Init(&askHeap)
-	for askHeap.Len() > 0 {
-		lvl := heap.Pop(&askHeap).(*util.PriceLevel)
-		fmt.Printf("ASK price=%.4f total=%.4f\n", lvl.Price, lvl.TotalAmount)
+	sort.Slice(out, func(i, j int) bool {
+		if desc {
+			return out[i].Price > out[j].Price
+		}
+		return out[i].Price < out[j].Price
+	})
+
+	if depth > 0 && depth < len(out) {
+		out = out[:depth]
 	}
+
+	cumulative := 0.0
+	for i := range out {
+		cumulative += out[i].Amount
+		out[i].CumulativeAmount = cumulative
+	}
+	return out
 }
 
 // dropPriceLevel removes an empty price level from heap and map.

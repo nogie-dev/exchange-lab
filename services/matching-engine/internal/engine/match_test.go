@@ -32,6 +32,9 @@ func TestMatchNoMatch_BidBelowAsk(t *testing.T) {
 	if _, ok := ob.Asks[101]; !ok {
 		t.Fatal("ask level should remain on book")
 	}
+	if len(result.MakerTransitions) != 0 {
+		t.Fatalf("no match must not produce maker transitions: %#v", result.MakerTransitions)
+	}
 }
 
 // ASK 가격이 best bid보다 높으면 체결되지 않는다.
@@ -210,6 +213,86 @@ func TestMatchMultiLevel_AskSweepsBids(t *testing.T) {
 	}
 }
 
+func TestMatchMarketOrderSweepsAvailableAskLevels(t *testing.T) {
+	ob := NewOrderBook("BTC-USD")
+	ob.AddOrder(newOrder("ask-100", models.Ask, 100, 0.3))
+	ob.AddOrder(newOrder("ask-101", models.Ask, 101, 0.3))
+
+	taker := newOrder("market-bid-1", models.Bid, 0, 0.5)
+	taker.OrderType = models.Market
+	result := Match(ob, taker)
+
+	if result.Residual != nil {
+		t.Fatalf("market order should be fully filled when liquidity is available, got residual %v", result.Residual.Amount)
+	}
+	if len(result.Logs) != 2 || result.Logs[0].Price != 100 || result.Logs[1].Price != 101 {
+		t.Fatalf("market order should consume best asks in order, got logs %#v", result.Logs)
+	}
+	if _, ok := ob.Asks[100]; ok {
+		t.Fatal("best ask should be fully consumed")
+	}
+	if lvl, ok := ob.Asks[101]; !ok || !approxEqual(lvl.TotalAmount, 0.1) {
+		t.Fatalf("remaining ask@101 want 0.1, got %#v", lvl)
+	}
+}
+
+func TestMatchMarketSellSweepsAvailableBidLevels(t *testing.T) {
+	ob := NewOrderBook("BTC-USD")
+	ob.AddOrder(newOrder("bid-102", models.Bid, 102, 0.3))
+	ob.AddOrder(newOrder("bid-101", models.Bid, 101, 0.3))
+
+	taker := newOrder("market-ask-1", models.Ask, 0, 0.5)
+	taker.OrderType = models.Market
+	result := Match(ob, taker)
+
+	if result.Residual != nil {
+		t.Fatalf("market order should be fully filled when liquidity is available, got residual %v", result.Residual.Amount)
+	}
+	if len(result.Logs) != 2 || result.Logs[0].Price != 102 || result.Logs[1].Price != 101 {
+		t.Fatalf("market order should consume best bids in order, got logs %#v", result.Logs)
+	}
+	if _, ok := ob.Bids[102]; ok {
+		t.Fatal("best bid should be fully consumed")
+	}
+	if lvl, ok := ob.Bids[101]; !ok || !approxEqual(lvl.TotalAmount, 0.1) {
+		t.Fatalf("remaining bid@101 want 0.1, got %#v", lvl)
+	}
+}
+
+func TestMatchMarketOrderReturnsUnfilledResidual(t *testing.T) {
+	ob := NewOrderBook("BTC-USD")
+	ob.AddOrder(newOrder("ask-100", models.Ask, 100, 0.3))
+
+	taker := newOrder("market-bid-1", models.Bid, 0, 1.0)
+	taker.OrderType = models.Market
+	result := Match(ob, taker)
+
+	if result.Residual == nil || !approxEqual(result.Residual.Amount, 0.7) {
+		t.Fatalf("market residual want 0.7, got %#v", result.Residual)
+	}
+	if _, ok := ob.Asks[100]; ok {
+		t.Fatal("available ask should be consumed before residual cancellation")
+	}
+}
+
+func TestMatchMarketOrderWithoutLiquidityReturnsFullResidual(t *testing.T) {
+	ob := NewOrderBook("BTC-USD")
+	taker := newOrder("market-bid-1", models.Bid, 0, 1.0)
+	taker.OrderType = models.Market
+
+	result := Match(ob, taker)
+
+	if result.Residual == nil || result.Residual.Amount != 1.0 {
+		t.Fatalf("market residual want 1.0, got %#v", result.Residual)
+	}
+	if len(result.Logs) != 0 {
+		t.Fatalf("market order without liquidity must not emit executions: %#v", result.Logs)
+	}
+	if len(ob.Index) != 0 || len(ob.Bids) != 0 || len(ob.Asks) != 0 {
+		t.Fatalf("market order without liquidity must not change the book: %#v", ob.Snapshot(1))
+	}
+}
+
 // --- 가격 우선 ---
 
 // 동일 BID taker에 대해 여러 ASK 레벨이 있을 때 가장 낮은 가격(best ask)부터 체결된다.
@@ -276,7 +359,8 @@ func TestMatchReturnsRawMatchLogs(t *testing.T) {
 		t.Fatalf("match logs want 1, got %d", len(result.Logs))
 	}
 	log := result.Logs[0]
-	if log.Ticker != "BTC-USD" ||
+	if log.ExecutionID == "" ||
+		log.Ticker != "BTC-USD" ||
 		log.Price != 100 ||
 		log.Amount != 0.25 ||
 		log.QuoteAmount != 25 ||
@@ -287,6 +371,57 @@ func TestMatchReturnsRawMatchLogs(t *testing.T) {
 		log.MakerSide != models.Ask ||
 		log.TakerSide != models.Bid {
 		t.Fatalf("unexpected match log: %#v", log)
+	}
+}
+
+func TestMatchReturnsMakerTransitionsInExecutionOrder(t *testing.T) {
+	ob := NewOrderBook("BTC-USD")
+	first := newOrder("ask-100", models.Ask, 100, 0.3)
+	first.UserID = "maker-1"
+	first.OrderType = models.Limit
+	second := newOrder("ask-101", models.Ask, 101, 0.4)
+	second.UserID = "maker-2"
+	second.OrderType = models.Limit
+	ob.AddOrder(first)
+	ob.AddOrder(second)
+
+	taker := newOrder("bid-1", models.Bid, 101, 0.5)
+	result := Match(ob, taker)
+
+	if len(result.MakerTransitions) != 2 {
+		t.Fatalf("maker transitions want 2, got %d", len(result.MakerTransitions))
+	}
+	assertFillTransition(t, result.MakerTransitions[0], "ask-100", 0.3, 0.3, 0)
+	assertFillTransition(t, result.MakerTransitions[1], "ask-101", 0.4, 0.2, 0.2)
+	if len(result.Logs) != len(result.MakerTransitions) {
+		t.Fatalf("each execution must have one maker transition: logs=%d transitions=%d", len(result.Logs), len(result.MakerTransitions))
+	}
+}
+
+func TestMatchMakerTransitionSnapshotsDoNotTrackLaterMutation(t *testing.T) {
+	ob := NewOrderBook("BTC-USD")
+	maker := newOrder("bid-1", models.Bid, 100, 1)
+	ob.AddOrder(maker)
+
+	taker := newOrder("ask-1", models.Ask, 100, 0.4)
+	result := Match(ob, taker)
+	maker.Amount = 9
+
+	if len(result.MakerTransitions) != 1 {
+		t.Fatalf("maker transitions want 1, got %d", len(result.MakerTransitions))
+	}
+	assertFillTransition(t, result.MakerTransitions[0], "bid-1", 1, 0.4, 0.6)
+}
+
+func assertFillTransition(t *testing.T, transition MakerFillTransition, orderID string, previous, filled, remaining float64) {
+	t.Helper()
+	if transition.Order.OrderID != orderID ||
+		!approxEqual(transition.Order.Amount, previous) ||
+		!approxEqual(transition.PreviousAmount, previous) ||
+		!approxEqual(transition.FilledAmount, filled) ||
+		!approxEqual(transition.RemainingAmount, remaining) ||
+		!approxEqual(transition.PreviousAmount, transition.FilledAmount+transition.RemainingAmount) {
+		t.Fatalf("unexpected fill transition: %#v", transition)
 	}
 }
 

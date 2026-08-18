@@ -11,8 +11,9 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const createMatchLog = `-- name: CreateMatchLog :exec
+const createMatchLog = `-- name: CreateMatchLog :execrows
 INSERT INTO match_logs (
+    execution_id,
     ticker,
     price,
     amount,
@@ -25,11 +26,13 @@ INSERT INTO match_logs (
     taker_side,
     matched_at
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
 )
+ON CONFLICT (execution_id) DO NOTHING
 `
 
 type CreateMatchLogParams struct {
+	ExecutionID  string             `db:"execution_id" json:"execution_id"`
 	Ticker       string             `db:"ticker" json:"ticker"`
 	Price        float64            `db:"price" json:"price"`
 	Amount       float64            `db:"amount" json:"amount"`
@@ -43,8 +46,9 @@ type CreateMatchLogParams struct {
 	MatchedAt    pgtype.Timestamptz `db:"matched_at" json:"matched_at"`
 }
 
-func (q *Queries) CreateMatchLog(ctx context.Context, arg CreateMatchLogParams) error {
-	_, err := q.db.Exec(ctx, createMatchLog,
+func (q *Queries) CreateMatchLog(ctx context.Context, arg CreateMatchLogParams) (int64, error) {
+	result, err := q.db.Exec(ctx, createMatchLog,
+		arg.ExecutionID,
 		arg.Ticker,
 		arg.Price,
 		arg.Amount,
@@ -57,5 +61,61 @@ func (q *Queries) CreateMatchLog(ctx context.Context, arg CreateMatchLogParams) 
 		arg.TakerSide,
 		arg.MatchedAt,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const matchLogPayloadMatches = `-- name: MatchLogPayloadMatches :one
+SELECT (
+    ticker = $2
+    AND price = $3
+    AND amount = $4
+    AND quote_amount = $5
+    AND maker_order_id = $6
+    AND taker_order_id = $7
+    AND maker_user_id = $8
+    AND taker_user_id = $9
+    AND maker_side = $10
+    AND taker_side = $11
+    AND matched_at = $12
+) AS matches
+FROM match_logs
+WHERE execution_id = $1
+`
+
+type MatchLogPayloadMatchesParams struct {
+	ExecutionID  string             `db:"execution_id" json:"execution_id"`
+	Ticker       string             `db:"ticker" json:"ticker"`
+	Price        float64            `db:"price" json:"price"`
+	Amount       float64            `db:"amount" json:"amount"`
+	QuoteAmount  float64            `db:"quote_amount" json:"quote_amount"`
+	MakerOrderID string             `db:"maker_order_id" json:"maker_order_id"`
+	TakerOrderID string             `db:"taker_order_id" json:"taker_order_id"`
+	MakerUserID  string             `db:"maker_user_id" json:"maker_user_id"`
+	TakerUserID  string             `db:"taker_user_id" json:"taker_user_id"`
+	MakerSide    string             `db:"maker_side" json:"maker_side"`
+	TakerSide    string             `db:"taker_side" json:"taker_side"`
+	MatchedAt    pgtype.Timestamptz `db:"matched_at" json:"matched_at"`
+}
+
+func (q *Queries) MatchLogPayloadMatches(ctx context.Context, arg MatchLogPayloadMatchesParams) (pgtype.Bool, error) {
+	row := q.db.QueryRow(ctx, matchLogPayloadMatches,
+		arg.ExecutionID,
+		arg.Ticker,
+		arg.Price,
+		arg.Amount,
+		arg.QuoteAmount,
+		arg.MakerOrderID,
+		arg.TakerOrderID,
+		arg.MakerUserID,
+		arg.TakerUserID,
+		arg.MakerSide,
+		arg.TakerSide,
+		arg.MatchedAt,
+	)
+	var matches pgtype.Bool
+	err := row.Scan(&matches)
+	return matches, err
 }

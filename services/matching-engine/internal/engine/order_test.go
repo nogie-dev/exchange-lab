@@ -8,10 +8,13 @@ import (
 
 func newOrder(id string, pos models.Position, price, amount float64) *models.BookOrder {
 	return &models.BookOrder{
-		OrderID:  id,
-		Position: pos,
-		Price:    price,
-		Amount:   amount,
+		Ticker:    "BTC-USD",
+		OrderID:   id,
+		UserID:    "test-user",
+		OrderType: models.Limit,
+		Position:  pos,
+		Price:     price,
+		Amount:    amount,
 	}
 }
 
@@ -35,7 +38,10 @@ func TestAddAndRemoveOrder(t *testing.T) {
 		t.Fatalf("order index not recorded")
 	}
 
-	ob.RemoveOrder("1")
+	removed := ob.RemoveOrder("1")
+	if removed == nil || removed.OrderID != "1" || removed.Price != 100 || removed.Amount != 1 {
+		t.Fatalf("RemoveOrder returned unexpected snapshot: %#v", removed)
+	}
 
 	if _, ok := ob.Bids[100]; ok {
 		t.Fatalf("price level should be removed after last order")
@@ -45,6 +51,18 @@ func TestAddAndRemoveOrder(t *testing.T) {
 	}
 	if ob.bidLevels.Len() != 0 {
 		t.Fatalf("bid heap length want 0, got %d", ob.bidLevels.Len())
+	}
+
+	order.Amount = 9
+	if removed.Amount != 1 {
+		t.Fatalf("removed snapshot must not track later mutations: got %v", removed.Amount)
+	}
+}
+
+func TestRemoveOrderReturnsNilWhenOrderDoesNotExist(t *testing.T) {
+	ob := NewOrderBook("BTC-USD")
+	if removed := ob.RemoveOrder("missing"); removed != nil {
+		t.Fatalf("missing removal should return nil, got %#v", removed)
 	}
 }
 
@@ -58,7 +76,13 @@ func TestEditOrderAmountIncreaseMovesToBack(t *testing.T) {
 	// "1" 의 주문 수량 증가
 	newAmt := 2.0
 	req := models.EditOrderRequest{OrderID: "1", Price: 100, Amount: &newAmt}
-	ob.EditOrder(req)
+	result := ob.EditOrder(req)
+	if result == nil {
+		t.Fatal("EditOrder should report the successful amount increase")
+	}
+	if result.Before.Amount != 1 || result.After.Amount != 2 || result.RequiresRematch {
+		t.Fatalf("unexpected edit result: %#v", result)
+	}
 
 	lvl, ok := ob.Bids[100]
 	if !ok {
@@ -95,10 +119,15 @@ func TestEditOrderPriceChangeMovesLevel(t *testing.T) {
 	ob.AddOrder(o1)
 
 	req := models.EditOrderRequest{OrderID: "1", Price: 101}
-	updated := ob.EditOrder(req)
-	if updated != nil {
-		ob.AddOrder(updated)
+	result := ob.EditOrder(req)
+	if result == nil || !result.RequiresRematch {
+		t.Fatalf("price change should require rematch: %#v", result)
 	}
+	if result.Before.Price != 100 || result.After.Price != 101 {
+		t.Fatalf("unexpected price transition: %#v", result)
+	}
+	updated := result.After
+	ob.AddOrder(&updated)
 
 	// 호가 변경 시 주문이 호가 간 이동을 하는가
 	if _, ok := ob.Bids[100]; ok {
@@ -123,7 +152,13 @@ func TestEditOrderAmountDecreaseKeepsOrder(t *testing.T) {
 	// 주문 수량 감소
 	newAmt := 1.0
 	req := models.EditOrderRequest{OrderID: "1", Price: 100, Amount: &newAmt}
-	ob.EditOrder(req)
+	result := ob.EditOrder(req)
+	if result == nil {
+		t.Fatal("EditOrder should report the successful amount decrease")
+	}
+	if result.Before.Amount != 2 || result.After.Amount != 1 || result.RequiresRematch {
+		t.Fatalf("unexpected edit result: %#v", result)
+	}
 
 	lvl, ok := ob.Bids[100]
 	if !ok {
@@ -146,5 +181,93 @@ func TestEditOrderAmountDecreaseKeepsOrder(t *testing.T) {
 		if ids[i] != want[i] {
 			t.Fatalf("order sequence mismatch: got %v want %v", ids, want)
 		}
+	}
+}
+
+func TestEditOrderReturnsNilWhenNothingChanges(t *testing.T) {
+	ob := NewOrderBook("BTC-USD")
+	ob.AddOrder(newOrder("1", models.Bid, 100, 1))
+
+	if result := ob.EditOrder(models.EditOrderRequest{OrderID: "1", Price: 100}); result != nil {
+		t.Fatalf("no-op edit should return nil, got %#v", result)
+	}
+}
+
+func TestSnapshotReturnsAllLevelsWhenDepthIsZero(t *testing.T) {
+	ob := NewOrderBook("BTC-USD")
+	ob.AddOrder(newOrder("bid-1", models.Bid, 100, 1))
+	ob.AddOrder(newOrder("bid-2", models.Bid, 99, 2))
+	ob.AddOrder(newOrder("ask-1", models.Ask, 101, 3))
+	ob.AddOrder(newOrder("ask-2", models.Ask, 102, 4))
+
+	snapshot := ob.Snapshot(0)
+
+	if snapshot.Ticker != "BTC-USD" {
+		t.Fatalf("Ticker want BTC-USD, got %s", snapshot.Ticker)
+	}
+	assertLevel(t, snapshot.Bids, 0, 100, 1, 1)
+	assertLevel(t, snapshot.Bids, 1, 99, 2, 3)
+	assertLevel(t, snapshot.Asks, 0, 101, 3, 3)
+	assertLevel(t, snapshot.Asks, 1, 102, 4, 7)
+}
+
+func TestSnapshotLimitsDepthPerSide(t *testing.T) {
+	ob := NewOrderBook("BTC-USD")
+	ob.AddOrder(newOrder("bid-1", models.Bid, 100, 1))
+	ob.AddOrder(newOrder("bid-2", models.Bid, 99, 2))
+	ob.AddOrder(newOrder("ask-1", models.Ask, 101, 3))
+	ob.AddOrder(newOrder("ask-2", models.Ask, 102, 4))
+
+	snapshot := ob.Snapshot(1)
+
+	if len(snapshot.Bids) != 1 {
+		t.Fatalf("bid depth want 1, got %d", len(snapshot.Bids))
+	}
+	if len(snapshot.Asks) != 1 {
+		t.Fatalf("ask depth want 1, got %d", len(snapshot.Asks))
+	}
+	assertLevel(t, snapshot.Bids, 0, 100, 1, 1)
+	assertLevel(t, snapshot.Asks, 0, 101, 3, 3)
+}
+
+func TestSnapshotDoesNotMutatePriceLevelIndexes(t *testing.T) {
+	ob := NewOrderBook("BTC-USD")
+	ob.AddOrder(newOrder("bid-1", models.Bid, 100, 1))
+	ob.AddOrder(newOrder("bid-2", models.Bid, 99, 2))
+	ob.AddOrder(newOrder("ask-1", models.Ask, 101, 3))
+	ob.AddOrder(newOrder("ask-2", models.Ask, 102, 4))
+
+	before := map[float64]int{
+		100: ob.Bids[100].Index,
+		99:  ob.Bids[99].Index,
+		101: ob.Asks[101].Index,
+		102: ob.Asks[102].Index,
+	}
+
+	ob.Snapshot(0)
+
+	after := map[float64]int{
+		100: ob.Bids[100].Index,
+		99:  ob.Bids[99].Index,
+		101: ob.Asks[101].Index,
+		102: ob.Asks[102].Index,
+	}
+	for price, want := range before {
+		if after[price] != want {
+			t.Fatalf("price level %.4f Index mutated: got %d want %d", price, after[price], want)
+		}
+	}
+}
+
+func assertLevel(t *testing.T, levels []OrderBookLevel, index int, price, amount, cumulative float64) {
+	t.Helper()
+
+	if len(levels) <= index {
+		t.Fatalf("missing level at index %d: got %d levels", index, len(levels))
+	}
+	got := levels[index]
+	if got.Price != price || got.Amount != amount || got.CumulativeAmount != cumulative {
+		t.Fatalf("level[%d] got price=%v amount=%v cumulative=%v, want price=%v amount=%v cumulative=%v",
+			index, got.Price, got.Amount, got.CumulativeAmount, price, amount, cumulative)
 	}
 }

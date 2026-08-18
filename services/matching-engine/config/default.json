@@ -1,0 +1,7 @@
+{
+  "engine": {
+    "worker_input_buffer_size": 128,
+    "match_log_output_buffer_size": 128,
+    "order_event_output_buffer_size": 128
+  }
+}

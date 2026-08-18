@@ -22,4 +22,5 @@ type MatchLog struct {
 	TakerSide    string             `db:"taker_side" json:"taker_side"`
 	MatchedAt    pgtype.Timestamptz `db:"matched_at" json:"matched_at"`
 	CreatedAt    pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	ExecutionID  string             `db:"execution_id" json:"execution_id"`
 }

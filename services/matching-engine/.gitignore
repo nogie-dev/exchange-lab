@@ -4,3 +4,5 @@ tmp/
 # Go build cache override (if placed elsewhere)
 *.test
 
+# Python load-test cache
+__pycache__/
