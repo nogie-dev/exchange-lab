@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: matching
+      POSTGRES_USER: matching
+      POSTGRES_HOST_AUTH_METHOD: trust
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U matching -d matching"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  matching-engine:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      MATCHING_ENGINE_DATABASE_URL: postgres://matching@postgres:5432/matching?sslmode=disable
+    ports:
+      - "8080:8080"
+    command:
+      - sh
+      - -ec
+      - goose -dir db/migrations postgres "$${MATCHING_ENGINE_DATABASE_URL}" up && exec ./matching-engine
+
+volumes:
+  postgres-data:

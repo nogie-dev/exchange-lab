@@ -1,8 +1,14 @@
 # Repository Guidelines
 
+## Session Context
+
+On the first repository task in a session, read `context/bootstrap.md` once. When starting or resuming persistent work, read only the matching `context/work/issue-N/handoff.md` (or `task-SLUG` when no issue exists). Treat handoffs as leads and verify mutable claims against code, tests, Git, issues, and pull requests.
+
+Do not bulk-load historical handoffs or keep raw command logs. Update a handoff only when work starts, pauses, transfers, changes direction materially, or completes. Use the issue or task ID as the stable directory key and keep the branch name as metadata.
+
 ## Agent Routing
 
-Before handling a user request, read `context/route.md` and choose the matching route. Follow that route's context files, workflow, and stop condition. If no route fits, inspect the repository first and take the smallest reversible action.
+Read `context/route.md` when the task area changes or is unclear, then choose the first matching route and follow its context files, workflow, and stop condition. Reuse the selected route during the same work cycle. If no route fits, inspect the repository first and take the smallest reversible action.
 
 ## GitHub Issue Management
 
@@ -10,7 +16,7 @@ When creating, inspecting, editing, triaging, or linking GitHub issues, use the 
 
 ## Project Structure & Module Organization
 
-This is a Go CLOB trading engine. The runnable entry point is `cmd/server/main.go`. Core matching and order book logic lives in `internal/engine`, raw matching log boundaries live in `internal/matchlog`, shared domain types in `internal/models`, and utilities such as heaps and queues in `internal/util`. SQL migrations are in `db/migrations`, hand-written queries in `db/query`, and sqlc output in `internal/matchlog/postgres/db`. Keep diagrams and static documentation assets in `asset/`; longer learning notes belong in `til/` or `omx_wiki/`.
+This is a Go CLOB trading engine. The runnable entry point is `cmd/server/main.go`. Core matching and order book logic lives in `internal/engine`, durable command journal boundaries in `internal/journal`, raw matching log boundaries in `internal/matchlog`, shared domain types in `internal/models`, and utilities such as heaps and queues in `internal/util`. SQL migrations are in `db/migrations`, hand-written queries in `db/query`, and sqlc output lives under each PostgreSQL persistence package. Keep diagrams and static documentation assets in `asset/`, longer learning notes in `til/`, and compact agent context in `context/`.
 
 ## Build, Test, and Development Commands
 

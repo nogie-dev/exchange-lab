@@ -1,12 +1,44 @@
 version: "2"
 sql:
   - engine: "postgresql"
-    schema: "db/migrations"
-    queries: "db/query"
+    schema:
+      - "db/migrations/00001_create_match_logs.sql"
+      - "db/migrations/00002_add_match_log_execution_id.sql"
+    queries: "db/query/match_logs.sql"
     gen:
       go:
         package: "db"
         out: "internal/matchlog/postgres/db"
+        sql_package: "pgx/v5"
+        emit_json_tags: true
+        emit_db_tags: true
+  - engine: "postgresql"
+    schema: "db/migrations/00003_create_order_journal.sql"
+    queries: "db/query/order_journal.sql"
+    gen:
+      go:
+        package: "db"
+        out: "internal/journal/postgres/db"
+        sql_package: "pgx/v5"
+        emit_json_tags: true
+        emit_db_tags: true
+  - engine: "postgresql"
+    schema: "db/migrations/00004_create_markets.sql"
+    queries: "db/query/markets.sql"
+    gen:
+      go:
+        package: "db"
+        out: "internal/market/postgres/db"
+        sql_package: "pgx/v5"
+        emit_json_tags: true
+        emit_db_tags: true
+  - engine: "postgresql"
+    schema: "db/migrations/00005_create_order_events.sql"
+    queries: "db/query/order_events.sql"
+    gen:
+      go:
+        package: "db"
+        out: "internal/orderevent/postgres/db"
         sql_package: "pgx/v5"
         emit_json_tags: true
         emit_db_tags: true
