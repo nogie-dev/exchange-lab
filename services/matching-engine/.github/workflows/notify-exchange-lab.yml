@@ -1,0 +1,30 @@
+name: Notify exchange-lab subtree sync
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    name: Request exchange-lab sync
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Dispatch repository event
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.EXCHANGE_LAB_DISPATCH_TOKEN }}
+          script: |
+            await github.rest.repos.createDispatchEvent({
+              owner: 'nogie-dev',
+              repo: 'exchange-lab',
+              event_type: 'matching-engine-updated',
+              client_payload: {
+                ref: context.ref,
+                sha: context.sha,
+              },
+            })
