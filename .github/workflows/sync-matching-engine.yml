@@ -31,14 +31,8 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Fetch matching-engine main
-        env:
-          MATCHING_ENGINE_SYNC_TOKEN: ${{ secrets.MATCHING_ENGINE_SYNC_TOKEN }}
         run: |
-          if [ -z "$MATCHING_ENGINE_SYNC_TOKEN" ]; then
-            echo "::error::MATCHING_ENGINE_SYNC_TOKEN is not configured"
-            exit 1
-          fi
-          git remote add matching-engine "https://x-access-token:${MATCHING_ENGINE_SYNC_TOKEN}@github.com/nogie-dev/matching-engine.git"
+          git remote add matching-engine https://github.com/nogie-dev/matching-engine.git
           git fetch --no-tags matching-engine main
 
       - name: Create subtree sync branch

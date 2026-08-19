@@ -21,12 +21,14 @@ the parent change.
 
 - In `nogie-dev/matching-engine`, add `EXCHANGE_LAB_DISPATCH_TOKEN`. It needs
   permission to dispatch an event to `nogie-dev/exchange-lab`.
-- In `nogie-dev/exchange-lab`, add `MATCHING_ENGINE_SYNC_TOKEN`. It needs
-  read access to `nogie-dev/matching-engine`.
 
-The exchange-lab workflow uses its own `GITHUB_TOKEN` to push a temporary
-branch and open the sync pull request. Repository settings must allow Actions
-to create pull requests.
+Both repositories are currently public, so the exchange-lab workflow can fetch
+`matching-engine/main` without a second secret. It uses its own `GITHUB_TOKEN`
+to push a temporary branch and open the sync pull request. Repository settings
+must allow Actions to create pull requests.
+
+If `matching-engine` becomes private, add a read-only source token to the
+exchange-lab workflow before changing its visibility.
 
 The sync can also be started manually from the `Sync matching-engine subtree`
 workflow when needed.
