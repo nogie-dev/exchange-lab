@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+
+	"github.com/nogie-dev/clob-trading/internal/numeric"
 )
 
 var (
@@ -107,6 +109,20 @@ func (r *Router) OrderBookSnapshot(ticker string, depth int) (OrderBookSnapshot,
 		snapshotResult: result,
 	}
 	return <-result, nil
+}
+
+// MarketPrecision returns the numeric contract owned by a ticker worker.
+func (r *Router) MarketPrecision(ticker string) (numeric.Precision, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.closed {
+		return numeric.Precision{}, ErrRouterClosed
+	}
+	w, err := r.workerLocked(ticker)
+	if err != nil {
+		return numeric.Precision{}, err
+	}
+	return w.Precision(), nil
 }
 
 func (r *Router) Ready() error {

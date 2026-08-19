@@ -24,19 +24,21 @@ INSERT INTO order_journal (
     ticker,
     sequence,
     command_type,
-    payload
+    payload,
+    market_config_version
 )
-SELECT $1, $2, last_sequence, $3, $4
+SELECT $1, $2, last_sequence, $3, $4, $5
 FROM next_sequence
 ON CONFLICT (command_id) DO NOTHING
 RETURNING sequence, recorded_at
 `
 
 type CreateOrderJournalEntryParams struct {
-	CommandID   string `db:"command_id" json:"command_id"`
-	Ticker      string `db:"ticker" json:"ticker"`
-	CommandType string `db:"command_type" json:"command_type"`
-	Payload     []byte `db:"payload" json:"payload"`
+	CommandID           string `db:"command_id" json:"command_id"`
+	Ticker              string `db:"ticker" json:"ticker"`
+	CommandType         string `db:"command_type" json:"command_type"`
+	Payload             []byte `db:"payload" json:"payload"`
+	MarketConfigVersion int64  `db:"market_config_version" json:"market_config_version"`
 }
 
 type CreateOrderJournalEntryRow struct {
@@ -50,6 +52,7 @@ func (q *Queries) CreateOrderJournalEntry(ctx context.Context, arg CreateOrderJo
 		arg.Ticker,
 		arg.CommandType,
 		arg.Payload,
+		arg.MarketConfigVersion,
 	)
 	var i CreateOrderJournalEntryRow
 	err := row.Scan(&i.Sequence, &i.RecordedAt)
@@ -57,46 +60,68 @@ func (q *Queries) CreateOrderJournalEntry(ctx context.Context, arg CreateOrderJo
 }
 
 const getOrderJournalEntry = `-- name: GetOrderJournalEntry :one
-SELECT command_id, ticker, sequence, command_type, payload, recorded_at
+SELECT command_id, ticker, sequence, command_type, payload, market_config_version, recorded_at
 FROM order_journal
 WHERE command_id = $1
 `
 
-func (q *Queries) GetOrderJournalEntry(ctx context.Context, commandID string) (OrderJournal, error) {
+type GetOrderJournalEntryRow struct {
+	CommandID           string             `db:"command_id" json:"command_id"`
+	Ticker              string             `db:"ticker" json:"ticker"`
+	Sequence            int64              `db:"sequence" json:"sequence"`
+	CommandType         string             `db:"command_type" json:"command_type"`
+	Payload             []byte             `db:"payload" json:"payload"`
+	MarketConfigVersion int64              `db:"market_config_version" json:"market_config_version"`
+	RecordedAt          pgtype.Timestamptz `db:"recorded_at" json:"recorded_at"`
+}
+
+func (q *Queries) GetOrderJournalEntry(ctx context.Context, commandID string) (GetOrderJournalEntryRow, error) {
 	row := q.db.QueryRow(ctx, getOrderJournalEntry, commandID)
-	var i OrderJournal
+	var i GetOrderJournalEntryRow
 	err := row.Scan(
 		&i.CommandID,
 		&i.Ticker,
 		&i.Sequence,
 		&i.CommandType,
 		&i.Payload,
+		&i.MarketConfigVersion,
 		&i.RecordedAt,
 	)
 	return i, err
 }
 
 const listOrderJournalEntries = `-- name: ListOrderJournalEntries :many
-SELECT command_id, ticker, sequence, command_type, payload, recorded_at
+SELECT command_id, ticker, sequence, command_type, payload, market_config_version, recorded_at
 FROM order_journal
 ORDER BY ticker, sequence
 `
 
-func (q *Queries) ListOrderJournalEntries(ctx context.Context) ([]OrderJournal, error) {
+type ListOrderJournalEntriesRow struct {
+	CommandID           string             `db:"command_id" json:"command_id"`
+	Ticker              string             `db:"ticker" json:"ticker"`
+	Sequence            int64              `db:"sequence" json:"sequence"`
+	CommandType         string             `db:"command_type" json:"command_type"`
+	Payload             []byte             `db:"payload" json:"payload"`
+	MarketConfigVersion int64              `db:"market_config_version" json:"market_config_version"`
+	RecordedAt          pgtype.Timestamptz `db:"recorded_at" json:"recorded_at"`
+}
+
+func (q *Queries) ListOrderJournalEntries(ctx context.Context) ([]ListOrderJournalEntriesRow, error) {
 	rows, err := q.db.Query(ctx, listOrderJournalEntries)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []OrderJournal
+	var items []ListOrderJournalEntriesRow
 	for rows.Next() {
-		var i OrderJournal
+		var i ListOrderJournalEntriesRow
 		if err := rows.Scan(
 			&i.CommandID,
 			&i.Ticker,
 			&i.Sequence,
 			&i.CommandType,
 			&i.Payload,
+			&i.MarketConfigVersion,
 			&i.RecordedAt,
 		); err != nil {
 			return nil, err

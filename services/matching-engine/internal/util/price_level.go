@@ -1,8 +1,10 @@
 package util
 
+import "github.com/nogie-dev/clob-trading/internal/numeric"
+
 type PriceLevel struct {
-	Price       float64
+	Price       numeric.PriceTicks
 	Queue       *Queue
 	Index       int
-	TotalAmount float64
+	TotalAmount numeric.QuantityLots
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/nogie-dev/clob-trading/internal/journal"
 	"github.com/nogie-dev/clob-trading/internal/journal/postgres/db"
+	"github.com/nogie-dev/clob-trading/internal/numeric"
 )
 
 type Store struct {
@@ -19,15 +20,19 @@ func NewStore(conn db.DBTX) *Store {
 }
 
 func (s *Store) Append(ctx context.Context, command journal.Command) (journal.AppendResult, error) {
+	if command.MarketConfigVersion == 0 {
+		command.MarketConfigVersion = numeric.DefaultConfigVersion
+	}
 	payload, err := journal.EncodePayload(command)
 	if err != nil {
 		return journal.AppendResult{}, err
 	}
 	row, err := s.queries.CreateOrderJournalEntry(ctx, db.CreateOrderJournalEntryParams{
-		CommandID:   command.CommandID,
-		Ticker:      command.Ticker,
-		CommandType: string(command.Type),
-		Payload:     payload,
+		CommandID:           command.CommandID,
+		Ticker:              command.Ticker,
+		CommandType:         string(command.Type),
+		Payload:             payload,
+		MarketConfigVersion: command.MarketConfigVersion,
 	})
 	if err == nil {
 		if row.Sequence <= 0 {
@@ -48,7 +53,7 @@ func (s *Store) Append(ctx context.Context, command journal.Command) (journal.Ap
 	if err != nil {
 		return journal.AppendResult{}, fmt.Errorf("read existing journal command %q: %w", command.CommandID, err)
 	}
-	existing, err := decodeRow(existingRow)
+	existing, err := decodeGetRow(existingRow)
 	if err != nil {
 		return journal.AppendResult{}, err
 	}
@@ -73,19 +78,38 @@ func (s *Store) List(ctx context.Context) ([]journal.Command, error) {
 	return commands, nil
 }
 
-func decodeRow(row db.OrderJournal) (journal.Command, error) {
+func decodeRow(row db.ListOrderJournalEntriesRow) (journal.Command, error) {
 	if row.Sequence <= 0 {
 		return journal.Command{}, fmt.Errorf("%w: sequence must be positive", journal.ErrInvalidCommand)
 	}
 	if !row.RecordedAt.Valid {
 		return journal.Command{}, fmt.Errorf("%w: recorded time is required", journal.ErrInvalidCommand)
 	}
-	return journal.Decode(
+	return journal.DecodeWithVersion(
 		row.CommandID,
 		row.Ticker,
 		row.Sequence,
 		journal.CommandType(row.CommandType),
 		row.Payload,
 		row.RecordedAt.Time,
+		row.MarketConfigVersion,
+	)
+}
+
+func decodeGetRow(row db.GetOrderJournalEntryRow) (journal.Command, error) {
+	if row.Sequence <= 0 {
+		return journal.Command{}, fmt.Errorf("%w: sequence must be positive", journal.ErrInvalidCommand)
+	}
+	if !row.RecordedAt.Valid {
+		return journal.Command{}, fmt.Errorf("%w: recorded time is required", journal.ErrInvalidCommand)
+	}
+	return journal.DecodeWithVersion(
+		row.CommandID,
+		row.Ticker,
+		row.Sequence,
+		journal.CommandType(row.CommandType),
+		row.Payload,
+		row.RecordedAt.Time,
+		row.MarketConfigVersion,
 	)
 }

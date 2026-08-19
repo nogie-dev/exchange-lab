@@ -8,16 +8,18 @@ import (
 	"time"
 
 	"github.com/nogie-dev/clob-trading/internal/models"
+	"github.com/nogie-dev/clob-trading/internal/numeric"
 	"github.com/nogie-dev/clob-trading/internal/util"
 )
 
 type OrderBook struct {
-	Bids      map[float64]*util.PriceLevel
-	Asks      map[float64]*util.PriceLevel
+	Bids      map[numeric.PriceTicks]*util.PriceLevel
+	Asks      map[numeric.PriceTicks]*util.PriceLevel
 	bidLevels util.MaxPriceHeap
 	askLevels util.MinPriceHeap
 	Index     map[string]*list.Element
 	Ticker    string
+	Precision numeric.Precision
 }
 
 type OrderBookSnapshot struct {
@@ -27,9 +29,9 @@ type OrderBookSnapshot struct {
 }
 
 type OrderBookLevel struct {
-	Price            float64 `json:"price"`
-	Amount           float64 `json:"amount"`
-	CumulativeAmount float64 `json:"cumulativeAmount"`
+	Price            numeric.PriceTicks   `json:"price"`
+	Amount           numeric.QuantityLots `json:"amount"`
+	CumulativeAmount numeric.QuantityLots `json:"cumulativeAmount"`
 }
 
 // EditOrderResult captures the immutable state immediately before and after a
@@ -42,18 +44,24 @@ type EditOrderResult struct {
 }
 
 func NewOrderBook(ticker string) *OrderBook {
+	return NewOrderBookWithPrecision(ticker, numeric.DefaultPrecision())
+}
+
+func NewOrderBookWithPrecision(ticker string, precision numeric.Precision) *OrderBook {
+	precision = precision.WithDefaults()
 	ob := &OrderBook{
-		Ticker: ticker,
-		Bids:   make(map[float64]*util.PriceLevel),
-		Asks:   make(map[float64]*util.PriceLevel),
-		Index:  make(map[string]*list.Element),
+		Ticker:    ticker,
+		Precision: precision,
+		Bids:      make(map[numeric.PriceTicks]*util.PriceLevel),
+		Asks:      make(map[numeric.PriceTicks]*util.PriceLevel),
+		Index:     make(map[string]*list.Element),
 	}
 	heap.Init(&ob.bidLevels)
 	heap.Init(&ob.askLevels)
 	return ob
 }
 
-func (ob *OrderBook) side(order *models.BookOrder) (map[float64]*util.PriceLevel, heap.Interface, bool) {
+func (ob *OrderBook) side(order *models.BookOrder) (map[numeric.PriceTicks]*util.PriceLevel, heap.Interface, bool) {
 	switch order.Position {
 	case models.Bid:
 		return ob.Bids, &ob.bidLevels, true
@@ -84,7 +92,7 @@ func CreateOrderAt(req models.CreateOrderRequest, recordedAt time.Time) models.B
 }
 
 func (ob *OrderBook) AddOrder(order *models.BookOrder) {
-	var levels map[float64]*util.PriceLevel
+	var levels map[numeric.PriceTicks]*util.PriceLevel
 	var h heap.Interface
 	switch order.Position {
 	case models.Bid:
@@ -106,7 +114,7 @@ func (ob *OrderBook) AddOrder(order *models.BookOrder) {
 	ob.Index[order.OrderID] = lvl.Queue.Push(order)
 }
 
-func (ob *OrderBook) level(order *models.BookOrder) (*util.PriceLevel, map[float64]*util.PriceLevel, heap.Interface, bool) {
+func (ob *OrderBook) level(order *models.BookOrder) (*util.PriceLevel, map[numeric.PriceTicks]*util.PriceLevel, heap.Interface, bool) {
 	levels, h, ok := ob.side(order)
 	if !ok {
 		slog.Error("unsupported position", "position", order.Position)
@@ -144,7 +152,7 @@ func (ob *OrderBook) RemoveOrder(orderID string) *models.BookOrder {
 	return &removed
 }
 
-func (ob *OrderBook) removeElement(lvl *util.PriceLevel, levels map[float64]*util.PriceLevel, h heap.Interface, elem *list.Element, fallbackAmount float64) {
+func (ob *OrderBook) removeElement(lvl *util.PriceLevel, levels map[numeric.PriceTicks]*util.PriceLevel, h heap.Interface, elem *list.Element, fallbackAmount numeric.QuantityLots) {
 	removed := lvl.Queue.Remove(elem)
 
 	var orderID string
@@ -155,7 +163,7 @@ func (ob *OrderBook) removeElement(lvl *util.PriceLevel, levels map[float64]*uti
 		delete(ob.Index, orderID)
 	}
 
-	var amt float64
+	var amt numeric.QuantityLots
 	if mo, ok := removed.(*models.BookOrder); ok && mo != nil {
 		amt = mo.Amount
 	} else {
@@ -244,7 +252,7 @@ func (ob *OrderBook) Snapshot(depth int) OrderBookSnapshot {
 	}
 }
 
-func snapshotLevels(levels map[float64]*util.PriceLevel, depth int, desc bool) []OrderBookLevel {
+func snapshotLevels(levels map[numeric.PriceTicks]*util.PriceLevel, depth int, desc bool) []OrderBookLevel {
 	out := make([]OrderBookLevel, 0, len(levels))
 	for _, lvl := range levels {
 		out = append(out, OrderBookLevel{
@@ -264,7 +272,7 @@ func snapshotLevels(levels map[float64]*util.PriceLevel, depth int, desc bool) [
 		out = out[:depth]
 	}
 
-	cumulative := 0.0
+	var cumulative numeric.QuantityLots
 	for i := range out {
 		cumulative += out[i].Amount
 		out[i].CumulativeAmount = cumulative
@@ -273,7 +281,7 @@ func snapshotLevels(levels map[float64]*util.PriceLevel, depth int, desc bool) [
 }
 
 // dropPriceLevel removes an empty price level from heap and map.
-func (ob *OrderBook) dropPriceLevel(h heap.Interface, levels map[float64]*util.PriceLevel, lvl *util.PriceLevel) {
+func (ob *OrderBook) dropPriceLevel(h heap.Interface, levels map[numeric.PriceTicks]*util.PriceLevel, lvl *util.PriceLevel) {
 	if lvl == nil {
 		return
 	}

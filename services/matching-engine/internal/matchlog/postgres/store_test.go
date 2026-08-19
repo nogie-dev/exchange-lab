@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/nogie-dev/clob-trading/internal/matchlog"
 	"github.com/nogie-dev/clob-trading/internal/models"
+	"github.com/nogie-dev/clob-trading/internal/numeric"
 )
 
 type execCall struct {
@@ -141,9 +142,9 @@ func testMatchLog() matchlog.MatchLog {
 	return matchlog.MatchLog{
 		ExecutionID:  "execution-1",
 		Ticker:       "BTC-USD",
-		Price:        100,
-		Amount:       0.5,
-		QuoteAmount:  50,
+		Price:        numeric.MustPrice("100"),
+		Amount:       numeric.MustQuantity("0.5"),
+		QuoteAmount:  numeric.MustQuote("50"),
 		MakerOrderID: "ask-1",
 		TakerOrderID: "bid-1",
 		MakerUserID:  "maker-user",
@@ -177,9 +178,10 @@ func TestStoreSaveMatchLogExecutesTransactionalInsert(t *testing.T) {
 	want := []interface{}{
 		log.ExecutionID,
 		log.Ticker,
-		log.Price,
-		log.Amount,
-		log.QuoteAmount,
+		int64(log.Price),
+		int64(log.Amount),
+		int64(log.QuoteAmount),
+		int64(numeric.DefaultConfigVersion),
 		log.MakerOrderID,
 		log.TakerOrderID,
 		log.MakerUserID,
@@ -204,10 +206,10 @@ func TestStoreSaveMatchLogDerivesQuoteAmount(t *testing.T) {
 	}
 
 	args := database.calls[0].args
-	if got, want := args[4], 50.0; got != want {
+	if got, want := args[4], int64(numeric.MustQuote("50")); got != want {
 		t.Fatalf("quote amount want %v, got %v", want, got)
 	}
-	if got, want := args[11], (pgtype.Timestamptz{Time: log.MatchedAt, Valid: true}); got != want {
+	if got, want := args[12], (pgtype.Timestamptz{Time: log.MatchedAt, Valid: true}); got != want {
 		t.Fatalf("matched_at want %#v, got %#v", want, got)
 	}
 }
@@ -259,14 +261,14 @@ func TestStoreSaveMatchLogsRejectsConflictingRetry(t *testing.T) {
 		t.Fatalf("first SaveMatchLog returned error: %v", err)
 	}
 	conflicting := log
-	conflicting.Amount = 0.75
-	conflicting.QuoteAmount = 75
+	conflicting.Amount = numeric.MustQuantity("0.75")
+	conflicting.QuoteAmount = numeric.MustQuote("75")
 
 	err := store.SaveMatchLog(context.Background(), conflicting)
 	if !errors.Is(err, ErrMatchLogConflict) {
 		t.Fatalf("expected ErrMatchLogConflict, got %v", err)
 	}
-	if got := database.rows[log.ExecutionID][3]; got != log.Amount {
+	if got := database.rows[log.ExecutionID][3]; got != int64(log.Amount) {
 		t.Fatalf("conflicting retry changed stored amount: want %v, got %v", log.Amount, got)
 	}
 }

@@ -155,7 +155,7 @@ func TestApplyAmendAndCancelCommandsReturnLifecycleEvents(t *testing.T) {
 			CommandID: "price-amend-command",
 			Ticker:    "BTC-USD",
 			OrderID:   bidOrderID,
-			Price:     101,
+			Price:     testPrice(101),
 		},
 	}
 	events := applyCommandEvents(t, worker, priceCommand)
@@ -163,13 +163,13 @@ func TestApplyAmendAndCancelCommandsReturnLifecycleEvents(t *testing.T) {
 		t.Fatalf("price amendment events want amend+maker+taker, got %#v", events)
 	}
 	assertOrderEvent(t, events[0], orderevent.Amended, 0, 2, 0, 0, 2)
-	if events[0].PreviousPrice != 100 || events[0].Price != 101 || events[0].Reason != orderevent.ReasonPriceChanged {
+	if events[0].PreviousPrice != testPrice(100) || events[0].Price != testPrice(101) || events[0].Reason != orderevent.ReasonPriceChanged {
 		t.Fatalf("unexpected amendment event: %#v", events[0])
 	}
 	assertOrderEvent(t, events[1], orderevent.Filled, 1, 1, 1, 0, 0)
 	assertOrderEvent(t, events[2], orderevent.PartiallyFilled, 2, 2, 1, 0, 1)
 
-	increasedAmount := 2.0
+	increasedAmount := testQuantity(2.0)
 	amountCommand := journal.Command{
 		CommandID:  "amount-amend-command",
 		Ticker:     "BTC-USD",
@@ -180,7 +180,7 @@ func TestApplyAmendAndCancelCommandsReturnLifecycleEvents(t *testing.T) {
 			CommandID: "amount-amend-command",
 			Ticker:    "BTC-USD",
 			OrderID:   bidOrderID,
-			Price:     101,
+			Price:     testPrice(101),
 			Amount:    &increasedAmount,
 		},
 	}
@@ -227,7 +227,7 @@ func TestApplyCommandsWithoutOrderbookChangeReturnNoEvents(t *testing.T) {
 			CommandID: "missing-amend-command",
 			Ticker:    "BTC-USD",
 			OrderID:   "missing",
-			Price:     100,
+			Price:     testPrice(100),
 		},
 	}
 	if events := applyCommandEvents(t, worker, missingAmend); len(events) != 0 {
@@ -275,8 +275,8 @@ func lifecycleCreateCommand(sequence int64, commandID, userID string, side model
 		UserID:    userID,
 		OrderType: orderType,
 		Position:  side,
-		Price:     price,
-		Amount:    amount,
+		Price:     testPrice(price),
+		Amount:    testQuantity(amount),
 		Nonce:     nonce,
 	}
 	return journal.Command{

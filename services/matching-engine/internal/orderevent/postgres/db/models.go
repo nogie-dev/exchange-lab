@@ -9,24 +9,25 @@ import (
 )
 
 type OrderEvent struct {
-	OrderEventID    int64              `db:"order_event_id" json:"order_event_id"`
-	EventID         string             `db:"event_id" json:"event_id"`
-	CommandID       string             `db:"command_id" json:"command_id"`
-	CommandSequence int64              `db:"command_sequence" json:"command_sequence"`
-	EventIndex      int32              `db:"event_index" json:"event_index"`
-	OrderID         string             `db:"order_id" json:"order_id"`
-	UserID          string             `db:"user_id" json:"user_id"`
-	Ticker          string             `db:"ticker" json:"ticker"`
-	EventType       string             `db:"event_type" json:"event_type"`
-	Reason          string             `db:"reason" json:"reason"`
-	OrderType       string             `db:"order_type" json:"order_type"`
-	Side            string             `db:"side" json:"side"`
-	PreviousPrice   float64            `db:"previous_price" json:"previous_price"`
-	Price           float64            `db:"price" json:"price"`
-	PreviousAmount  float64            `db:"previous_amount" json:"previous_amount"`
-	FilledAmount    float64            `db:"filled_amount" json:"filled_amount"`
-	CanceledAmount  float64            `db:"canceled_amount" json:"canceled_amount"`
-	RemainingAmount float64            `db:"remaining_amount" json:"remaining_amount"`
-	OccurredAt      pgtype.Timestamptz `db:"occurred_at" json:"occurred_at"`
-	CreatedAt       pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	OrderEventID        int64              `db:"order_event_id" json:"order_event_id"`
+	EventID             string             `db:"event_id" json:"event_id"`
+	CommandID           string             `db:"command_id" json:"command_id"`
+	CommandSequence     int64              `db:"command_sequence" json:"command_sequence"`
+	EventIndex          int32              `db:"event_index" json:"event_index"`
+	OrderID             string             `db:"order_id" json:"order_id"`
+	UserID              string             `db:"user_id" json:"user_id"`
+	Ticker              string             `db:"ticker" json:"ticker"`
+	EventType           string             `db:"event_type" json:"event_type"`
+	Reason              string             `db:"reason" json:"reason"`
+	OrderType           string             `db:"order_type" json:"order_type"`
+	Side                string             `db:"side" json:"side"`
+	OccurredAt          pgtype.Timestamptz `db:"occurred_at" json:"occurred_at"`
+	CreatedAt           pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	PreviousPriceTicks  int64              `db:"previous_price_ticks" json:"previous_price_ticks"`
+	PriceTicks          int64              `db:"price_ticks" json:"price_ticks"`
+	PreviousAmountLots  int64              `db:"previous_amount_lots" json:"previous_amount_lots"`
+	FilledAmountLots    int64              `db:"filled_amount_lots" json:"filled_amount_lots"`
+	CanceledAmountLots  int64              `db:"canceled_amount_lots" json:"canceled_amount_lots"`
+	RemainingAmountLots int64              `db:"remaining_amount_lots" json:"remaining_amount_lots"`
+	MarketConfigVersion int64              `db:"market_config_version" json:"market_config_version"`
 }

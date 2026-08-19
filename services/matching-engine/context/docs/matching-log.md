@@ -7,6 +7,7 @@ Core files:
 - `internal/matchlog/postgres/store_test.go`
 - `internal/matchlog/postgres/db`
 - `db/migrations/00001_create_match_logs.sql`
+- `db/migrations/00008_convert_match_logs_to_fixed_units.sql`
 - `db/query/match_logs.sql`
 - `sqlc.yaml`
 
@@ -17,6 +18,8 @@ Responsibilities:
 - `matchlog.Writer` owns persistence requests and sends a commit acknowledgement back to the requesting worker.
 - `postgres.Store` appends logs with sqlc-generated pgx queries.
 - `match_logs` is plain PostgreSQL schema, not TimescaleDB-specific.
+- Raw numeric columns are `price_ticks`, `amount_lots`, and
+  `quote_amount_atoms`, all `BIGINT`, alongside `market_config_version`.
 
 Durability policy:
 

@@ -4,6 +4,7 @@ sql:
     schema:
       - "db/migrations/00001_create_match_logs.sql"
       - "db/migrations/00002_add_match_log_execution_id.sql"
+      - "db/migrations/00008_convert_match_logs_to_fixed_units.sql"
     queries: "db/query/match_logs.sql"
     gen:
       go:
@@ -13,7 +14,9 @@ sql:
         emit_json_tags: true
         emit_db_tags: true
   - engine: "postgresql"
-    schema: "db/migrations/00003_create_order_journal.sql"
+    schema:
+      - "db/migrations/00003_create_order_journal.sql"
+      - "db/migrations/00007_add_journal_config_version.sql"
     queries: "db/query/order_journal.sql"
     gen:
       go:
@@ -23,7 +26,9 @@ sql:
         emit_json_tags: true
         emit_db_tags: true
   - engine: "postgresql"
-    schema: "db/migrations/00004_create_markets.sql"
+    schema:
+      - "db/migrations/00004_create_markets.sql"
+      - "db/migrations/00006_add_market_precision.sql"
     queries: "db/query/markets.sql"
     gen:
       go:
@@ -33,7 +38,9 @@ sql:
         emit_json_tags: true
         emit_db_tags: true
   - engine: "postgresql"
-    schema: "db/migrations/00005_create_order_events.sql"
+    schema:
+      - "db/migrations/00005_create_order_events.sql"
+      - "db/migrations/00009_convert_order_events_to_fixed_units.sql"
     queries: "db/query/order_events.sql"
     gen:
       go:

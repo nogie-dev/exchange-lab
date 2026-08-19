@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/nogie-dev/clob-trading/internal/models"
+	"github.com/nogie-dev/clob-trading/internal/numeric"
 	"github.com/nogie-dev/clob-trading/internal/orderevent"
 )
 
@@ -144,11 +145,11 @@ func testOrderEvent() orderevent.Event {
 		Reason:          orderevent.ReasonPartialFill,
 		OrderType:       models.Limit,
 		Side:            models.Ask,
-		PreviousPrice:   100,
-		Price:           100,
-		PreviousAmount:  1,
-		FilledAmount:    0.4,
-		RemainingAmount: 0.6,
+		PreviousPrice:   numeric.MustPrice("100"),
+		Price:           numeric.MustPrice("100"),
+		PreviousAmount:  numeric.MustQuantity("1"),
+		FilledAmount:    numeric.MustQuantity("0.4"),
+		RemainingAmount: numeric.MustQuantity("0.6"),
 		OccurredAt:      time.Date(2026, 8, 13, 12, 0, 0, 0, time.UTC),
 	}
 	event.EventID = orderevent.GenerateEventID(event.Ticker, event.CommandID, event.OrderID, event.Type, event.EventIndex)

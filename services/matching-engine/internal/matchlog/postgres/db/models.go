@@ -9,18 +9,19 @@ import (
 )
 
 type MatchLog struct {
-	MatchLogID   int64              `db:"match_log_id" json:"match_log_id"`
-	Ticker       string             `db:"ticker" json:"ticker"`
-	Price        float64            `db:"price" json:"price"`
-	Amount       float64            `db:"amount" json:"amount"`
-	QuoteAmount  float64            `db:"quote_amount" json:"quote_amount"`
-	MakerOrderID string             `db:"maker_order_id" json:"maker_order_id"`
-	TakerOrderID string             `db:"taker_order_id" json:"taker_order_id"`
-	MakerUserID  string             `db:"maker_user_id" json:"maker_user_id"`
-	TakerUserID  string             `db:"taker_user_id" json:"taker_user_id"`
-	MakerSide    string             `db:"maker_side" json:"maker_side"`
-	TakerSide    string             `db:"taker_side" json:"taker_side"`
-	MatchedAt    pgtype.Timestamptz `db:"matched_at" json:"matched_at"`
-	CreatedAt    pgtype.Timestamptz `db:"created_at" json:"created_at"`
-	ExecutionID  string             `db:"execution_id" json:"execution_id"`
+	MatchLogID          int64              `db:"match_log_id" json:"match_log_id"`
+	Ticker              string             `db:"ticker" json:"ticker"`
+	MakerOrderID        string             `db:"maker_order_id" json:"maker_order_id"`
+	TakerOrderID        string             `db:"taker_order_id" json:"taker_order_id"`
+	MakerUserID         string             `db:"maker_user_id" json:"maker_user_id"`
+	TakerUserID         string             `db:"taker_user_id" json:"taker_user_id"`
+	MakerSide           string             `db:"maker_side" json:"maker_side"`
+	TakerSide           string             `db:"taker_side" json:"taker_side"`
+	MatchedAt           pgtype.Timestamptz `db:"matched_at" json:"matched_at"`
+	CreatedAt           pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	ExecutionID         string             `db:"execution_id" json:"execution_id"`
+	PriceTicks          int64              `db:"price_ticks" json:"price_ticks"`
+	AmountLots          int64              `db:"amount_lots" json:"amount_lots"`
+	QuoteAmountAtoms    int64              `db:"quote_amount_atoms" json:"quote_amount_atoms"`
+	MarketConfigVersion int64              `db:"market_config_version" json:"market_config_version"`
 }

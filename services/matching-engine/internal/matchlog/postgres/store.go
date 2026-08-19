@@ -10,6 +10,7 @@ import (
 	"github.com/nogie-dev/clob-trading/internal/matchlog"
 	"github.com/nogie-dev/clob-trading/internal/matchlog/postgres/db"
 	"github.com/nogie-dev/clob-trading/internal/models"
+	"github.com/nogie-dev/clob-trading/internal/numeric"
 )
 
 var (
@@ -91,18 +92,19 @@ func (s *Store) SaveMatchLogs(ctx context.Context, logs []matchlog.MatchLog) err
 
 func payloadParams(param db.CreateMatchLogParams) db.MatchLogPayloadMatchesParams {
 	return db.MatchLogPayloadMatchesParams{
-		ExecutionID:  param.ExecutionID,
-		Ticker:       param.Ticker,
-		Price:        param.Price,
-		Amount:       param.Amount,
-		QuoteAmount:  param.QuoteAmount,
-		MakerOrderID: param.MakerOrderID,
-		TakerOrderID: param.TakerOrderID,
-		MakerUserID:  param.MakerUserID,
-		TakerUserID:  param.TakerUserID,
-		MakerSide:    param.MakerSide,
-		TakerSide:    param.TakerSide,
-		MatchedAt:    param.MatchedAt,
+		ExecutionID:         param.ExecutionID,
+		Ticker:              param.Ticker,
+		PriceTicks:          param.PriceTicks,
+		AmountLots:          param.AmountLots,
+		QuoteAmountAtoms:    param.QuoteAmountAtoms,
+		MarketConfigVersion: param.MarketConfigVersion,
+		MakerOrderID:        param.MakerOrderID,
+		TakerOrderID:        param.TakerOrderID,
+		MakerUserID:         param.MakerUserID,
+		TakerUserID:         param.TakerUserID,
+		MakerSide:           param.MakerSide,
+		TakerSide:           param.TakerSide,
+		MatchedAt:           param.MatchedAt,
 	}
 }
 
@@ -113,21 +115,30 @@ func (s *Store) params(log matchlog.MatchLog) (db.CreateMatchLogParams, error) {
 
 	quoteAmount := log.QuoteAmount
 	if quoteAmount == 0 {
-		quoteAmount = log.Price * log.Amount
+		var err error
+		quoteAmount, err = numeric.DefaultPrecision().QuoteAmount(log.Price, log.Amount)
+		if err != nil {
+			return db.CreateMatchLogParams{}, err
+		}
+	}
+	configVersion := log.MarketConfigVersion
+	if configVersion == 0 {
+		configVersion = numeric.DefaultConfigVersion
 	}
 
 	return db.CreateMatchLogParams{
-		ExecutionID:  log.ExecutionID,
-		Ticker:       log.Ticker,
-		Price:        log.Price,
-		Amount:       log.Amount,
-		QuoteAmount:  quoteAmount,
-		MakerOrderID: log.MakerOrderID,
-		TakerOrderID: log.TakerOrderID,
-		MakerUserID:  log.MakerUserID,
-		TakerUserID:  log.TakerUserID,
-		MakerSide:    string(log.MakerSide),
-		TakerSide:    string(log.TakerSide),
+		ExecutionID:         log.ExecutionID,
+		Ticker:              log.Ticker,
+		PriceTicks:          int64(log.Price),
+		AmountLots:          int64(log.Amount),
+		QuoteAmountAtoms:    int64(quoteAmount),
+		MarketConfigVersion: configVersion,
+		MakerOrderID:        log.MakerOrderID,
+		TakerOrderID:        log.TakerOrderID,
+		MakerUserID:         log.MakerUserID,
+		TakerUserID:         log.TakerUserID,
+		MakerSide:           string(log.MakerSide),
+		TakerSide:           string(log.TakerSide),
 		MatchedAt: pgtype.Timestamptz{
 			Time:  log.MatchedAt.UTC(),
 			Valid: true,
