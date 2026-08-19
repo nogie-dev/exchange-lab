@@ -98,7 +98,7 @@ func TestStoreAppendAllowsIdenticalRetry(t *testing.T) {
 	recordedAt := pgtype.Timestamptz{Time: time.Date(2026, 7, 17, 12, 0, 0, 0, time.UTC), Valid: true}
 	store := NewStore(&fakeDBTX{
 		createErr: pgx.ErrNoRows,
-		existing:  []any{command.CommandID, command.Ticker, int64(1), string(command.Type), payload, recordedAt},
+		existing:  []any{command.CommandID, command.Ticker, int64(1), string(command.Type), payload, int64(1), recordedAt},
 	})
 
 	result, err := store.Append(context.Background(), command)
@@ -121,7 +121,7 @@ func TestStoreAppendRejectsConflictingRetry(t *testing.T) {
 	recordedAt := pgtype.Timestamptz{Time: time.Date(2026, 7, 17, 12, 0, 0, 0, time.UTC), Valid: true}
 	store := NewStore(&fakeDBTX{
 		createErr: pgx.ErrNoRows,
-		existing:  []any{command.CommandID, command.Ticker, int64(1), string(command.Type), payload, recordedAt},
+		existing:  []any{command.CommandID, command.Ticker, int64(1), string(command.Type), payload, int64(1), recordedAt},
 	})
 
 	_, err = store.Append(context.Background(), command)

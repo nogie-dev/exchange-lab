@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/nogie-dev/clob-trading/internal/numeric"
 )
 
 var (
@@ -16,6 +18,7 @@ var (
 type Market struct {
 	Ticker    string
 	CreatedAt time.Time
+	Precision numeric.Precision
 }
 
 type AddResult struct {

@@ -6,11 +6,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
 	"github.com/nogie-dev/clob-trading/internal/models"
+	"github.com/nogie-dev/clob-trading/internal/numeric"
 )
 
 var (
@@ -44,24 +44,25 @@ const (
 // source for individual executions; order events describe the resulting order
 // lifecycle for both maker and taker orders.
 type Event struct {
-	EventID         string
-	CommandID       string
-	CommandSequence int64
-	EventIndex      int32
-	OrderID         string
-	UserID          string
-	Ticker          string
-	Type            Type
-	Reason          string
-	OrderType       models.OrderType
-	Side            models.Position
-	PreviousPrice   float64
-	Price           float64
-	PreviousAmount  float64
-	FilledAmount    float64
-	CanceledAmount  float64
-	RemainingAmount float64
-	OccurredAt      time.Time
+	EventID             string
+	CommandID           string
+	CommandSequence     int64
+	EventIndex          int32
+	OrderID             string
+	UserID              string
+	Ticker              string
+	Type                Type
+	Reason              string
+	OrderType           models.OrderType
+	Side                models.Position
+	PreviousPrice       numeric.PriceTicks
+	Price               numeric.PriceTicks
+	PreviousAmount      numeric.QuantityLots
+	FilledAmount        numeric.QuantityLots
+	CanceledAmount      numeric.QuantityLots
+	RemainingAmount     numeric.QuantityLots
+	MarketConfigVersion int64
+	OccurredAt          time.Time
 }
 
 type Store interface {
@@ -104,10 +105,12 @@ func Validate(event Event) error {
 		return fmt.Errorf("%w: side must be BID or ASK", ErrInvalidEvent)
 	case !validPrices(event):
 		return fmt.Errorf("%w: invalid order prices", ErrInvalidEvent)
-	case !positiveFinite(event.PreviousAmount):
+	case event.PreviousAmount <= 0:
 		return fmt.Errorf("%w: previous amount must be positive", ErrInvalidEvent)
-	case !nonNegativeFinite(event.FilledAmount) || !nonNegativeFinite(event.CanceledAmount) || !nonNegativeFinite(event.RemainingAmount):
-		return fmt.Errorf("%w: event amounts cannot be negative or non-finite", ErrInvalidEvent)
+	case event.FilledAmount < 0 || event.CanceledAmount < 0 || event.RemainingAmount < 0:
+		return fmt.Errorf("%w: event amounts cannot be negative", ErrInvalidEvent)
+	case event.MarketConfigVersion < 0:
+		return fmt.Errorf("%w: market config version cannot be negative", ErrInvalidEvent)
 	case event.OccurredAt.IsZero():
 		return fmt.Errorf("%w: occurred time is required", ErrInvalidEvent)
 	}
@@ -132,7 +135,7 @@ func validType(eventType Type) bool {
 }
 
 func validPrices(event Event) bool {
-	if !nonNegativeFinite(event.PreviousPrice) || !nonNegativeFinite(event.Price) {
+	if event.PreviousPrice < 0 || event.Price < 0 {
 		return false
 	}
 	if event.OrderType == models.Market {
@@ -144,15 +147,15 @@ func validPrices(event Event) bool {
 func validateTransition(event Event) error {
 	switch event.Type {
 	case Resting:
-		if event.FilledAmount != 0 || event.CanceledAmount != 0 || event.RemainingAmount <= 0 || !sameAmount(event.PreviousAmount, event.RemainingAmount) {
+		if event.FilledAmount != 0 || event.CanceledAmount != 0 || event.RemainingAmount <= 0 || event.PreviousAmount != event.RemainingAmount {
 			return fmt.Errorf("%w: invalid resting transition", ErrInvalidEvent)
 		}
 	case PartiallyFilled:
-		if event.FilledAmount <= 0 || event.CanceledAmount != 0 || event.RemainingAmount <= 0 || !sameAmount(event.PreviousAmount, event.FilledAmount+event.RemainingAmount) {
+		if event.FilledAmount <= 0 || event.CanceledAmount != 0 || event.RemainingAmount <= 0 || event.PreviousAmount != event.FilledAmount+event.RemainingAmount {
 			return fmt.Errorf("%w: invalid partial-fill transition", ErrInvalidEvent)
 		}
 	case Filled:
-		if event.FilledAmount <= 0 || event.CanceledAmount != 0 || event.RemainingAmount != 0 || !sameAmount(event.PreviousAmount, event.FilledAmount) {
+		if event.FilledAmount <= 0 || event.CanceledAmount != 0 || event.RemainingAmount != 0 || event.PreviousAmount != event.FilledAmount {
 			return fmt.Errorf("%w: invalid filled transition", ErrInvalidEvent)
 		}
 	case Amended:
@@ -160,21 +163,9 @@ func validateTransition(event Event) error {
 			return fmt.Errorf("%w: invalid amended transition", ErrInvalidEvent)
 		}
 	case Canceled, RemainderCanceled:
-		if event.FilledAmount != 0 || event.CanceledAmount <= 0 || event.RemainingAmount != 0 || !sameAmount(event.PreviousAmount, event.CanceledAmount) {
+		if event.FilledAmount != 0 || event.CanceledAmount <= 0 || event.RemainingAmount != 0 || event.PreviousAmount != event.CanceledAmount {
 			return fmt.Errorf("%w: invalid canceled transition", ErrInvalidEvent)
 		}
 	}
 	return nil
-}
-
-func positiveFinite(value float64) bool {
-	return value > 0 && !math.IsNaN(value) && !math.IsInf(value, 0)
-}
-
-func nonNegativeFinite(value float64) bool {
-	return value >= 0 && !math.IsNaN(value) && !math.IsInf(value, 0)
-}
-
-func sameAmount(left, right float64) bool {
-	return math.Abs(left-right) < 1e-9
 }

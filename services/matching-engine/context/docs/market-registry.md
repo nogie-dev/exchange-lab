@@ -4,6 +4,8 @@ The `markets` table is the durable registry of tickers that the engine should
 restore at startup. It is separate from `order_journal` and `match_logs`:
 
 - `markets` records that a ticker exists.
+- `markets` also records the market's fixed-point precision contract:
+  scales, tick/lot sizes, bounds, and `config_version`.
 - `order_journal` records commands needed to rebuild its orderbook.
 - `match_logs` records executions produced while replaying or processing those
   commands.
@@ -17,6 +19,6 @@ Startup loads registered markets and journal rows, takes their union, and
 restores one worker per ticker. Journal-only tickers are backfilled into
 `markets` for compatibility with rows written before the registry existed.
 
-The current table intentionally stores only ticker identity and creation time.
-Market status, price/amount precision, fees, and removal lifecycle remain
-follow-up market-catalog concerns.
+Market status, fees, and removal lifecycle remain follow-up market-catalog
+concerns. Precision changes must be versioned because journal and raw event
+rows carry the configuration version used to interpret their integer units.

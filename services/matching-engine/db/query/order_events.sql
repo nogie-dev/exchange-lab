@@ -11,16 +11,17 @@ INSERT INTO order_events (
     reason,
     order_type,
     side,
-    previous_price,
-    price,
-    previous_amount,
-    filled_amount,
-    canceled_amount,
-    remaining_amount,
+    previous_price_ticks,
+    price_ticks,
+    previous_amount_lots,
+    filled_amount_lots,
+    canceled_amount_lots,
+    remaining_amount_lots,
+    market_config_version,
     occurred_at
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9,
-    $10, $11, $12, $13, $14, $15, $16, $17, $18
+    $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
 )
 ON CONFLICT (event_id) DO NOTHING;
 
@@ -36,13 +37,14 @@ SELECT (
     AND reason = $9
     AND order_type = $10
     AND side = $11
-    AND previous_price = $12
-    AND price = $13
-    AND previous_amount = $14
-    AND filled_amount = $15
-    AND canceled_amount = $16
-    AND remaining_amount = $17
-    AND occurred_at = $18
+    AND previous_price_ticks = $12
+    AND price_ticks = $13
+    AND previous_amount_lots = $14
+    AND filled_amount_lots = $15
+    AND canceled_amount_lots = $16
+    AND remaining_amount_lots = $17
+    AND market_config_version = $18
+    AND occurred_at = $19
 ) AS matches
 FROM order_events
 WHERE event_id = $1;

@@ -10,6 +10,8 @@
 </p>
  
 요청이 API Gateway를 통해 들어오면 Router가 트레이딩 페어별로 분기하고, 각 BookWorker가 명령을 PostgreSQL journal에 먼저 기록한 뒤 자신의 오더북에서 순차 처리한다. 매칭 알고리즘(`Match`)은 오더북을 직접 참조하며, 페어별 싱글 스레드에서 동작한다.
+
+가격과 수량은 API에서 decimal string으로 받고, 엔진 내부에서는 시장별 precision에 따라 `PriceTicks`·`QuantityLots` 정수 단위로만 처리한다. journal, 체결 로그, 주문 이벤트도 같은 canonical 단위와 `market_config_version`을 기록한다. 세부 계약은 [`context/docs/numeric-model.md`](context/docs/numeric-model.md)에 정리되어 있다.
  
 - **BookWorker**: 페어당 1개. OrderBook + Index + Match를 소유
 - **유저 인증/잔고 검증**: 상위 User Service에서 처리한다고 가정 (점선 표시)

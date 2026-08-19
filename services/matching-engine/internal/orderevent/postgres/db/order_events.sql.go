@@ -24,39 +24,41 @@ INSERT INTO order_events (
     reason,
     order_type,
     side,
-    previous_price,
-    price,
-    previous_amount,
-    filled_amount,
-    canceled_amount,
-    remaining_amount,
+    previous_price_ticks,
+    price_ticks,
+    previous_amount_lots,
+    filled_amount_lots,
+    canceled_amount_lots,
+    remaining_amount_lots,
+    market_config_version,
     occurred_at
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9,
-    $10, $11, $12, $13, $14, $15, $16, $17, $18
+    $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
 )
 ON CONFLICT (event_id) DO NOTHING
 `
 
 type CreateOrderEventParams struct {
-	EventID         string             `db:"event_id" json:"event_id"`
-	CommandID       string             `db:"command_id" json:"command_id"`
-	CommandSequence int64              `db:"command_sequence" json:"command_sequence"`
-	EventIndex      int32              `db:"event_index" json:"event_index"`
-	OrderID         string             `db:"order_id" json:"order_id"`
-	UserID          string             `db:"user_id" json:"user_id"`
-	Ticker          string             `db:"ticker" json:"ticker"`
-	EventType       string             `db:"event_type" json:"event_type"`
-	Reason          string             `db:"reason" json:"reason"`
-	OrderType       string             `db:"order_type" json:"order_type"`
-	Side            string             `db:"side" json:"side"`
-	PreviousPrice   float64            `db:"previous_price" json:"previous_price"`
-	Price           float64            `db:"price" json:"price"`
-	PreviousAmount  float64            `db:"previous_amount" json:"previous_amount"`
-	FilledAmount    float64            `db:"filled_amount" json:"filled_amount"`
-	CanceledAmount  float64            `db:"canceled_amount" json:"canceled_amount"`
-	RemainingAmount float64            `db:"remaining_amount" json:"remaining_amount"`
-	OccurredAt      pgtype.Timestamptz `db:"occurred_at" json:"occurred_at"`
+	EventID             string             `db:"event_id" json:"event_id"`
+	CommandID           string             `db:"command_id" json:"command_id"`
+	CommandSequence     int64              `db:"command_sequence" json:"command_sequence"`
+	EventIndex          int32              `db:"event_index" json:"event_index"`
+	OrderID             string             `db:"order_id" json:"order_id"`
+	UserID              string             `db:"user_id" json:"user_id"`
+	Ticker              string             `db:"ticker" json:"ticker"`
+	EventType           string             `db:"event_type" json:"event_type"`
+	Reason              string             `db:"reason" json:"reason"`
+	OrderType           string             `db:"order_type" json:"order_type"`
+	Side                string             `db:"side" json:"side"`
+	PreviousPriceTicks  int64              `db:"previous_price_ticks" json:"previous_price_ticks"`
+	PriceTicks          int64              `db:"price_ticks" json:"price_ticks"`
+	PreviousAmountLots  int64              `db:"previous_amount_lots" json:"previous_amount_lots"`
+	FilledAmountLots    int64              `db:"filled_amount_lots" json:"filled_amount_lots"`
+	CanceledAmountLots  int64              `db:"canceled_amount_lots" json:"canceled_amount_lots"`
+	RemainingAmountLots int64              `db:"remaining_amount_lots" json:"remaining_amount_lots"`
+	MarketConfigVersion int64              `db:"market_config_version" json:"market_config_version"`
+	OccurredAt          pgtype.Timestamptz `db:"occurred_at" json:"occurred_at"`
 }
 
 func (q *Queries) CreateOrderEvent(ctx context.Context, arg CreateOrderEventParams) (int64, error) {
@@ -72,12 +74,13 @@ func (q *Queries) CreateOrderEvent(ctx context.Context, arg CreateOrderEventPara
 		arg.Reason,
 		arg.OrderType,
 		arg.Side,
-		arg.PreviousPrice,
-		arg.Price,
-		arg.PreviousAmount,
-		arg.FilledAmount,
-		arg.CanceledAmount,
-		arg.RemainingAmount,
+		arg.PreviousPriceTicks,
+		arg.PriceTicks,
+		arg.PreviousAmountLots,
+		arg.FilledAmountLots,
+		arg.CanceledAmountLots,
+		arg.RemainingAmountLots,
+		arg.MarketConfigVersion,
 		arg.OccurredAt,
 	)
 	if err != nil {
@@ -98,37 +101,39 @@ SELECT (
     AND reason = $9
     AND order_type = $10
     AND side = $11
-    AND previous_price = $12
-    AND price = $13
-    AND previous_amount = $14
-    AND filled_amount = $15
-    AND canceled_amount = $16
-    AND remaining_amount = $17
-    AND occurred_at = $18
+    AND previous_price_ticks = $12
+    AND price_ticks = $13
+    AND previous_amount_lots = $14
+    AND filled_amount_lots = $15
+    AND canceled_amount_lots = $16
+    AND remaining_amount_lots = $17
+    AND market_config_version = $18
+    AND occurred_at = $19
 ) AS matches
 FROM order_events
 WHERE event_id = $1
 `
 
 type OrderEventPayloadMatchesParams struct {
-	EventID         string             `db:"event_id" json:"event_id"`
-	CommandID       string             `db:"command_id" json:"command_id"`
-	CommandSequence int64              `db:"command_sequence" json:"command_sequence"`
-	EventIndex      int32              `db:"event_index" json:"event_index"`
-	OrderID         string             `db:"order_id" json:"order_id"`
-	UserID          string             `db:"user_id" json:"user_id"`
-	Ticker          string             `db:"ticker" json:"ticker"`
-	EventType       string             `db:"event_type" json:"event_type"`
-	Reason          string             `db:"reason" json:"reason"`
-	OrderType       string             `db:"order_type" json:"order_type"`
-	Side            string             `db:"side" json:"side"`
-	PreviousPrice   float64            `db:"previous_price" json:"previous_price"`
-	Price           float64            `db:"price" json:"price"`
-	PreviousAmount  float64            `db:"previous_amount" json:"previous_amount"`
-	FilledAmount    float64            `db:"filled_amount" json:"filled_amount"`
-	CanceledAmount  float64            `db:"canceled_amount" json:"canceled_amount"`
-	RemainingAmount float64            `db:"remaining_amount" json:"remaining_amount"`
-	OccurredAt      pgtype.Timestamptz `db:"occurred_at" json:"occurred_at"`
+	EventID             string             `db:"event_id" json:"event_id"`
+	CommandID           string             `db:"command_id" json:"command_id"`
+	CommandSequence     int64              `db:"command_sequence" json:"command_sequence"`
+	EventIndex          int32              `db:"event_index" json:"event_index"`
+	OrderID             string             `db:"order_id" json:"order_id"`
+	UserID              string             `db:"user_id" json:"user_id"`
+	Ticker              string             `db:"ticker" json:"ticker"`
+	EventType           string             `db:"event_type" json:"event_type"`
+	Reason              string             `db:"reason" json:"reason"`
+	OrderType           string             `db:"order_type" json:"order_type"`
+	Side                string             `db:"side" json:"side"`
+	PreviousPriceTicks  int64              `db:"previous_price_ticks" json:"previous_price_ticks"`
+	PriceTicks          int64              `db:"price_ticks" json:"price_ticks"`
+	PreviousAmountLots  int64              `db:"previous_amount_lots" json:"previous_amount_lots"`
+	FilledAmountLots    int64              `db:"filled_amount_lots" json:"filled_amount_lots"`
+	CanceledAmountLots  int64              `db:"canceled_amount_lots" json:"canceled_amount_lots"`
+	RemainingAmountLots int64              `db:"remaining_amount_lots" json:"remaining_amount_lots"`
+	MarketConfigVersion int64              `db:"market_config_version" json:"market_config_version"`
+	OccurredAt          pgtype.Timestamptz `db:"occurred_at" json:"occurred_at"`
 }
 
 func (q *Queries) OrderEventPayloadMatches(ctx context.Context, arg OrderEventPayloadMatchesParams) (pgtype.Bool, error) {
@@ -144,12 +149,13 @@ func (q *Queries) OrderEventPayloadMatches(ctx context.Context, arg OrderEventPa
 		arg.Reason,
 		arg.OrderType,
 		arg.Side,
-		arg.PreviousPrice,
-		arg.Price,
-		arg.PreviousAmount,
-		arg.FilledAmount,
-		arg.CanceledAmount,
-		arg.RemainingAmount,
+		arg.PreviousPriceTicks,
+		arg.PriceTicks,
+		arg.PreviousAmountLots,
+		arg.FilledAmountLots,
+		arg.CanceledAmountLots,
+		arg.RemainingAmountLots,
+		arg.MarketConfigVersion,
 		arg.OccurredAt,
 	)
 	var matches pgtype.Bool

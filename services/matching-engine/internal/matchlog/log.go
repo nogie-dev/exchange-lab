@@ -8,24 +8,26 @@ import (
 	"time"
 
 	"github.com/nogie-dev/clob-trading/internal/models"
+	"github.com/nogie-dev/clob-trading/internal/numeric"
 )
 
 const DefaultOutputBufferSize = 128
 
 // MatchLog is the raw append-only execution event emitted by the matching engine.
 type MatchLog struct {
-	ExecutionID  string
-	Ticker       string
-	Price        float64
-	Amount       float64
-	QuoteAmount  float64
-	MakerOrderID string
-	TakerOrderID string
-	MakerUserID  string
-	TakerUserID  string
-	MakerSide    models.Position
-	TakerSide    models.Position
-	MatchedAt    time.Time
+	ExecutionID         string
+	Ticker              string
+	Price               numeric.PriceTicks
+	Amount              numeric.QuantityLots
+	QuoteAmount         numeric.QuoteAtoms
+	MarketConfigVersion int64
+	MakerOrderID        string
+	TakerOrderID        string
+	MakerUserID         string
+	TakerUserID         string
+	MakerSide           models.Position
+	TakerSide           models.Position
+	MatchedAt           time.Time
 }
 
 // GenerateExecutionID returns a stable identity for one fill within an incoming order.

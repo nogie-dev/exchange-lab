@@ -4,6 +4,7 @@ import (
 	"log/slog"
 
 	"github.com/nogie-dev/clob-trading/internal/models"
+	"github.com/nogie-dev/clob-trading/internal/numeric"
 )
 
 func logOrderReceived(order *models.BookOrder) {
@@ -49,7 +50,7 @@ func logOrderEdited(order *models.BookOrder, reason string) {
 	)
 }
 
-func logTradeExecuted(ticker, takerID, makerID string, price, amount float64) {
+func logTradeExecuted(ticker, takerID, makerID string, price numeric.PriceTicks, amount numeric.QuantityLots) {
 	slog.Info("trade executed",
 		"ticker", ticker,
 		"takerOrderID", takerID,

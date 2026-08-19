@@ -9,6 +9,7 @@ import (
 	"github.com/nogie-dev/clob-trading/internal/journal"
 	"github.com/nogie-dev/clob-trading/internal/matchlog"
 	"github.com/nogie-dev/clob-trading/internal/models"
+	"github.com/nogie-dev/clob-trading/internal/numeric"
 	"github.com/nogie-dev/clob-trading/internal/orderevent"
 )
 
@@ -18,6 +19,7 @@ var ErrInvalidReplaySequence = errors.New("invalid replay sequence")
 
 type BookWorkerOptions struct {
 	InputBufferSize int
+	Precision       numeric.Precision
 	PersistenceOut  chan<- matchlog.PersistenceRequest
 	OrderEventOut   chan<- orderevent.PersistenceRequest
 	Journal         journal.Store
@@ -32,6 +34,7 @@ type BookWorker struct {
 	orderEventOut  chan<- orderevent.PersistenceRequest
 	journalStore   journal.Store
 	state          *EngineState
+	precision      numeric.Precision
 	done           chan struct{}
 }
 
@@ -42,8 +45,12 @@ func NewBookWorker(ticker string, ob *OrderBook) *BookWorker {
 }
 
 func NewBookWorkerWithOptions(ticker string, ob *OrderBook, opts BookWorkerOptions) *BookWorker {
+	precision := opts.Precision.WithDefaults()
 	if ob == nil {
-		ob = NewOrderBook(ticker)
+		ob = NewOrderBookWithPrecision(ticker, precision)
+	} else {
+		precision = ob.Precision.WithDefaults()
+		ob.Precision = precision
 	}
 	bufferSize := opts.InputBufferSize
 	if bufferSize <= 0 {
@@ -61,6 +68,7 @@ func NewBookWorkerWithOptions(ticker string, ob *OrderBook, opts BookWorkerOptio
 		orderEventOut:  opts.OrderEventOut,
 		journalStore:   opts.Journal,
 		state:          state,
+		precision:      precision,
 		done:           make(chan struct{}),
 	}
 }
@@ -156,7 +164,7 @@ func (w *BookWorker) commandFromEvent(ev Event) (journal.Command, bool) {
 			slog.Warn("mismatched NewOrder payload ticker", "payloadTicker", ev.NewOrder.Ticker, "worker", w.ticker)
 			return journal.Command{}, false
 		}
-		return journal.Command{CommandID: ev.NewOrder.CommandID, Ticker: w.ticker, Type: journal.CreateCommand, Create: ev.NewOrder}, true
+		return journal.Command{CommandID: ev.NewOrder.CommandID, Ticker: w.ticker, Type: journal.CreateCommand, MarketConfigVersion: w.precision.ConfigVersion, Create: ev.NewOrder}, true
 	case EditOrder:
 		if ev.EditReq == nil {
 			slog.Warn("nil EditOrderRequest payload", "ticker", w.ticker)
@@ -166,7 +174,7 @@ func (w *BookWorker) commandFromEvent(ev Event) (journal.Command, bool) {
 			slog.Warn("mismatched EditOrder payload ticker", "payloadTicker", ev.EditReq.Ticker, "worker", w.ticker, "orderID", ev.EditReq.OrderID)
 			return journal.Command{}, false
 		}
-		return journal.Command{CommandID: ev.EditReq.CommandID, Ticker: w.ticker, Type: journal.AmendCommand, Amend: ev.EditReq}, true
+		return journal.Command{CommandID: ev.EditReq.CommandID, Ticker: w.ticker, Type: journal.AmendCommand, MarketConfigVersion: w.precision.ConfigVersion, Amend: ev.EditReq}, true
 	case CancelOrder:
 		if ev.CancelReq == nil {
 			slog.Warn("nil CancelRequest payload", "ticker", w.ticker)
@@ -176,7 +184,7 @@ func (w *BookWorker) commandFromEvent(ev Event) (journal.Command, bool) {
 			slog.Warn("mismatched CancelOrder payload ticker", "payloadTicker", ev.CancelReq.Ticker, "worker", w.ticker, "orderID", ev.CancelReq.OrderID)
 			return journal.Command{}, false
 		}
-		return journal.Command{CommandID: ev.CancelReq.CommandID, Ticker: w.ticker, Type: journal.CancelCommand, Cancel: ev.CancelReq}, true
+		return journal.Command{CommandID: ev.CancelReq.CommandID, Ticker: w.ticker, Type: journal.CancelCommand, MarketConfigVersion: w.precision.ConfigVersion, Cancel: ev.CancelReq}, true
 	default:
 		slog.Warn("unsupported event type", "type", ev.Type)
 		return journal.Command{}, false
@@ -186,6 +194,12 @@ func (w *BookWorker) commandFromEvent(ev Event) (journal.Command, bool) {
 func (w *BookWorker) applyCommand(command journal.Command) ([]orderevent.Event, error) {
 	if err := journal.Validate(command); err != nil {
 		return nil, err
+	}
+	if command.MarketConfigVersion == 0 {
+		command.MarketConfigVersion = w.precision.ConfigVersion
+	}
+	if command.MarketConfigVersion != w.precision.ConfigVersion {
+		return nil, fmt.Errorf("market config version mismatch: command=%d worker=%d", command.MarketConfigVersion, w.precision.ConfigVersion)
 	}
 	if command.RecordedAt.IsZero() {
 		return nil, fmt.Errorf("%w: recorded time is required", journal.ErrInvalidCommand)
@@ -198,6 +212,9 @@ func (w *BookWorker) applyCommand(command journal.Command) ([]orderevent.Event, 
 		beforeMatch := order
 		logOrderReceived(&order)
 		result := Match(w.OrderBook, &order)
+		if result.Err != nil {
+			return nil, result.Err
+		}
 		if err := w.persistMatchLogs(result.Logs); err != nil {
 			return nil, err
 		}
@@ -231,6 +248,9 @@ func (w *BookWorker) applyCommand(command journal.Command) ([]orderevent.Event, 
 		updated := editResult.After
 		beforeMatch := updated
 		result := Match(w.OrderBook, &updated)
+		if result.Err != nil {
+			return nil, result.Err
+		}
 		if err := w.persistMatchLogs(result.Logs); err != nil {
 			return nil, err
 		}
@@ -291,6 +311,10 @@ func (w *BookWorker) Done() <-chan struct{} {
 
 func (w *BookWorker) Err() error {
 	return w.state.Err()
+}
+
+func (w *BookWorker) Precision() numeric.Precision {
+	return w.precision
 }
 
 func isCommandEvent(eventType EventType) bool {

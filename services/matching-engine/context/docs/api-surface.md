@@ -10,13 +10,24 @@ user -> trading platform -> matching engine
 
 The trading platform owns authentication, account ownership, balance checks, reservation, public rate limits, and user-facing error messages. The matching engine only processes validated order commands and returns engine-level command/query results.
 
+Numeric contract:
+
+- Create and amend requests send `price` and `amount` as decimal JSON strings;
+  numeric JSON values are not accepted.
+- The engine converts those strings into market-specific price ticks and
+  quantity lots before journal append.
+- Orderbook responses format price, amount, and cumulative amount as decimal
+  strings. See `context/docs/numeric-model.md`.
+
 In scope:
 
 - Command-oriented order API:
   - `POST /commands/orders/create` creates an order command.
-    Limit orders require a positive price. Market orders omit price, consume
-    available opposite-side liquidity without a protection price, and cancel
-    any unfilled remainder instead of resting it on the orderbook.
+    Limit orders require a positive decimal-string price. Market orders omit
+    price, consume available opposite-side liquidity without a protection
+    price, and cancel any unfilled remainder instead of resting it on the
+    orderbook. The current engine amount is a base quantity; quote-budget
+    market-buy semantics are a separate platform/ledger contract.
   - `POST /commands/orders/amend` amends an active order.
   - `POST /commands/orders/cancel` cancels an active order; it does not erase history.
   - Every command requires a stable upstream `command_id` used for journal idempotency.
@@ -36,8 +47,9 @@ Out of scope:
 - Raw match log query endpoints.
 - Trade history, candles, volume, analytics, or ETL APIs.
 - WebSocket delta streams in the first API implementation.
-- Ticker removal and market metadata management; ticker addition is the only
-  market lifecycle operation currently exposed.
+- Ticker removal and market metadata mutation; ticker addition is the only
+  market lifecycle operation currently exposed. Numeric precision is loaded
+  from the durable market registry and is not changed through this endpoint.
 
 Design rules:
 

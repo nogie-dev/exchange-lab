@@ -9,12 +9,13 @@ import (
 )
 
 type OrderJournal struct {
-	CommandID   string             `db:"command_id" json:"command_id"`
-	Ticker      string             `db:"ticker" json:"ticker"`
-	Sequence    int64              `db:"sequence" json:"sequence"`
-	CommandType string             `db:"command_type" json:"command_type"`
-	Payload     []byte             `db:"payload" json:"payload"`
-	RecordedAt  pgtype.Timestamptz `db:"recorded_at" json:"recorded_at"`
+	CommandID           string             `db:"command_id" json:"command_id"`
+	Ticker              string             `db:"ticker" json:"ticker"`
+	Sequence            int64              `db:"sequence" json:"sequence"`
+	CommandType         string             `db:"command_type" json:"command_type"`
+	Payload             []byte             `db:"payload" json:"payload"`
+	RecordedAt          pgtype.Timestamptz `db:"recorded_at" json:"recorded_at"`
+	MarketConfigVersion int64              `db:"market_config_version" json:"market_config_version"`
 }
 
 type OrderJournalSequence struct {

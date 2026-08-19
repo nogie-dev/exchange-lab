@@ -101,8 +101,8 @@ func TestBookWorkerRejectsNewOrderPayloadTickerMismatch(t *testing.T) {
 			UserID:    "alice",
 			OrderType: models.Limit,
 			Position:  models.Bid,
-			Price:     100,
-			Amount:    1,
+			Price:     testPrice(100),
+			Amount:    testQuantity(1),
 			Nonce:     1,
 		},
 	})
@@ -149,8 +149,8 @@ func TestBookWorkerEmitsMatchLogs(t *testing.T) {
 			UserID:    "taker-user",
 			OrderType: models.Limit,
 			Position:  models.Bid,
-			Price:     101,
-			Amount:    0.25,
+			Price:     testPrice(101),
+			Amount:    testQuantity(0.25),
 			Nonce:     1,
 		},
 	})
@@ -201,13 +201,13 @@ func TestBookWorkerCancelsMarketResidualInsteadOfResting(t *testing.T) {
 			UserID:    "taker-user",
 			OrderType: models.Market,
 			Position:  models.Bid,
-			Amount:    1,
+			Amount:    testQuantity(1),
 		},
 	})
 	if err != nil {
 		t.Fatalf("market order returned error: %v", err)
 	}
-	if got := <-logs; len(got) != 1 || got[0].Amount != 0.25 {
+	if got := <-logs; len(got) != 1 || got[0].Amount != testQuantity(0.25) {
 		t.Fatalf("unexpected market execution logs: %#v", got)
 	}
 	if len(worker.OrderBook.Index) != 0 || len(worker.OrderBook.Bids) != 0 {
@@ -248,13 +248,13 @@ func TestBookWorkerCancelsMarketSellResidualInsteadOfResting(t *testing.T) {
 			UserID:    "taker-user",
 			OrderType: models.Market,
 			Position:  models.Ask,
-			Amount:    1,
+			Amount:    testQuantity(1),
 		},
 	})
 	if err != nil {
 		t.Fatalf("market order returned error: %v", err)
 	}
-	if got := <-logs; len(got) != 1 || got[0].Amount != 0.25 {
+	if got := <-logs; len(got) != 1 || got[0].Amount != testQuantity(0.25) {
 		t.Fatalf("unexpected market execution logs: %#v", got)
 	}
 	if len(worker.OrderBook.Index) != 0 || len(worker.OrderBook.Asks) != 0 {
@@ -292,8 +292,8 @@ func TestBookWorkerWaitsForPersistenceBeforeNextCommand(t *testing.T) {
 				UserID:    "taker-user",
 				OrderType: models.Limit,
 				Position:  models.Bid,
-				Price:     101,
-				Amount:    0.25,
+				Price:     testPrice(101),
+				Amount:    testQuantity(0.25),
 				Nonce:     1,
 			},
 		})
@@ -362,8 +362,8 @@ func TestBookWorkerWaitsForOrderEventPersistenceBeforeNextCommand(t *testing.T) 
 				UserID:    "alice",
 				OrderType: models.Limit,
 				Position:  models.Bid,
-				Price:     100,
-				Amount:    1,
+				Price:     testPrice(100),
+				Amount:    testQuantity(1),
 				Nonce:     1,
 			},
 		})
@@ -442,8 +442,8 @@ func TestBookWorkerOrderEventPersistenceFailureHaltsRouter(t *testing.T) {
 				UserID:    "alice",
 				OrderType: models.Limit,
 				Position:  models.Bid,
-				Price:     100,
-				Amount:    1,
+				Price:     testPrice(100),
+				Amount:    testQuantity(1),
 				Nonce:     1,
 			},
 		})
@@ -485,8 +485,8 @@ func TestBookWorkerPersistenceFailureHaltsRouter(t *testing.T) {
 				UserID:    "taker-user",
 				OrderType: models.Limit,
 				Position:  models.Bid,
-				Price:     101,
-				Amount:    0.25,
+				Price:     testPrice(101),
+				Amount:    testQuantity(0.25),
 				Nonce:     1,
 			},
 		})
@@ -573,7 +573,7 @@ func TestBookWorkerRejectsCancelOrderPayloadTickerMismatch(t *testing.T) {
 		t.Fatalf("mismatched CancelOrder payload should not remove order %q from index", existing.OrderID)
 	}
 	if _, ok := worker.OrderBook.Bids[existing.Price]; !ok {
-		t.Fatalf("mismatched CancelOrder payload should not remove bid level %.2f", existing.Price)
+		t.Fatalf("mismatched CancelOrder payload should not remove bid level %v", existing.Price)
 	}
 }
 
@@ -587,28 +587,28 @@ func TestBookWorkerRejectsEditOrderPayloadTickerMismatch(t *testing.T) {
 		t.Fatalf("Register returned error: %v", err)
 	}
 
-	newAmount := 2.0
+	newAmount := testQuantity(2.0)
 	routeAndDrain(t, router, worker, Event{
 		Type:   EditOrder,
 		Ticker: "BTC-USD",
 		EditReq: &models.EditOrderRequest{
 			Ticker:  "ETH-USD",
 			OrderID: existing.OrderID,
-			Price:   101,
+			Price:   testPrice(101),
 			Amount:  &newAmount,
 		},
 	})
 
-	if existing.Price != 100 {
-		t.Fatalf("mismatched EditOrder payload should not change price, got %.2f", existing.Price)
+	if existing.Price != testPrice(100) {
+		t.Fatalf("mismatched EditOrder payload should not change price, got %v", existing.Price)
 	}
-	if existing.Amount != 1 {
-		t.Fatalf("mismatched EditOrder payload should not change amount, got %.2f", existing.Amount)
+	if existing.Amount != testQuantity(1) {
+		t.Fatalf("mismatched EditOrder payload should not change amount, got %v", existing.Amount)
 	}
-	if _, ok := worker.OrderBook.Bids[100]; !ok {
+	if _, ok := worker.OrderBook.Bids[testPrice(100)]; !ok {
 		t.Fatal("mismatched EditOrder payload should keep original bid level")
 	}
-	if _, ok := worker.OrderBook.Bids[101]; ok {
+	if _, ok := worker.OrderBook.Bids[testPrice(101)]; ok {
 		t.Fatal("mismatched EditOrder payload should not create edited bid level")
 	}
 }
@@ -638,8 +638,8 @@ func TestRouterOrderBookSnapshotRunsAfterQueuedCommand(t *testing.T) {
 			UserID:    "alice",
 			OrderType: models.Limit,
 			Position:  models.Bid,
-			Price:     100,
-			Amount:    2,
+			Price:     testPrice(100),
+			Amount:    testQuantity(2),
 			Nonce:     1,
 		},
 	}); err != nil {
@@ -691,8 +691,8 @@ func TestBookWorkerCommitsJournalBeforeBookMutation(t *testing.T) {
 				UserID:    "alice",
 				OrderType: models.Limit,
 				Position:  models.Bid,
-				Price:     100,
-				Amount:    1,
+				Price:     testPrice(100),
+				Amount:    testQuantity(1),
 				Nonce:     1,
 			},
 		})
@@ -736,8 +736,8 @@ func TestBookWorkerJournalFailureHaltsBeforeBookMutation(t *testing.T) {
 				UserID:    "alice",
 				OrderType: models.Limit,
 				Position:  models.Bid,
-				Price:     100,
-				Amount:    1,
+				Price:     testPrice(100),
+				Amount:    testQuantity(1),
 				Nonce:     1,
 			},
 		})
@@ -775,7 +775,7 @@ func TestBookWorkerReplayCancelsMarketResidualDeterministically(t *testing.T) {
 	if len(firstLogs) != 1 || len(secondLogs) != 1 {
 		t.Fatalf("replayed market logs want 1/1, got %d/%d", len(firstLogs), len(secondLogs))
 	}
-	if firstLogs[0].Amount != 0.25 || firstLogs[0].Price != 100 {
+	if firstLogs[0].Amount != testQuantity(0.25) || firstLogs[0].Price != testPrice(100) {
 		t.Fatalf("unexpected replayed market execution: %#v", firstLogs[0])
 	}
 	if firstLogs[0].ExecutionID != secondLogs[0].ExecutionID || firstLogs[0].MatchedAt != secondLogs[0].MatchedAt {
@@ -787,15 +787,15 @@ func TestBookWorkerReplayAppliesAmendAndCancel(t *testing.T) {
 	baseTime := time.Date(2026, 7, 17, 12, 0, 0, 0, time.UTC)
 	create := models.CreateOrderRequest{
 		CommandID: "create-command", Ticker: "BTC-USD", UserID: "alice",
-		OrderType: models.Limit, Position: models.Bid, Price: 100, Amount: 1, Nonce: 1,
+		OrderType: models.Limit, Position: models.Bid, Price: testPrice(100), Amount: testQuantity(1), Nonce: 1,
 	}
 	orderID := CreateOrderAt(create, baseTime).OrderID
-	amount := 2.0
+	amount := testQuantity(2.0)
 	commands := []journal.Command{
 		{CommandID: create.CommandID, Ticker: create.Ticker, Sequence: 1, Type: journal.CreateCommand, RecordedAt: baseTime, Create: &create},
 		{
 			CommandID: "amend-command", Ticker: create.Ticker, Sequence: 2, Type: journal.AmendCommand, RecordedAt: baseTime.Add(time.Second),
-			Amend: &models.EditOrderRequest{CommandID: "amend-command", Ticker: create.Ticker, OrderID: orderID, Price: 100, Amount: &amount},
+			Amend: &models.EditOrderRequest{CommandID: "amend-command", Ticker: create.Ticker, OrderID: orderID, Price: testPrice(100), Amount: &amount},
 		},
 		{
 			CommandID: "cancel-command", Ticker: create.Ticker, Sequence: 3, Type: journal.CancelCommand, RecordedAt: baseTime.Add(2 * time.Second),
@@ -818,11 +818,11 @@ func replayCommands() []journal.Command {
 	return []journal.Command{
 		{
 			CommandID: "maker-command", Ticker: "BTC-USD", Sequence: 1, Type: journal.CreateCommand, RecordedAt: makerTime,
-			Create: &models.CreateOrderRequest{CommandID: "maker-command", Ticker: "BTC-USD", UserID: "maker", OrderType: models.Limit, Position: models.Ask, Price: 100, Amount: 1, Nonce: 1},
+			Create: &models.CreateOrderRequest{CommandID: "maker-command", Ticker: "BTC-USD", UserID: "maker", OrderType: models.Limit, Position: models.Ask, Price: testPrice(100), Amount: testQuantity(1), Nonce: 1},
 		},
 		{
 			CommandID: "taker-command", Ticker: "BTC-USD", Sequence: 2, Type: journal.CreateCommand, RecordedAt: takerTime,
-			Create: &models.CreateOrderRequest{CommandID: "taker-command", Ticker: "BTC-USD", UserID: "taker", OrderType: models.Limit, Position: models.Bid, Price: 100, Amount: 1, Nonce: 1},
+			Create: &models.CreateOrderRequest{CommandID: "taker-command", Ticker: "BTC-USD", UserID: "taker", OrderType: models.Limit, Position: models.Bid, Price: testPrice(100), Amount: testQuantity(1), Nonce: 1},
 		},
 	}
 }
@@ -833,11 +833,11 @@ func marketReplayCommands() []journal.Command {
 	return []journal.Command{
 		{
 			CommandID: "maker-command", Ticker: "BTC-USD", Sequence: 1, Type: journal.CreateCommand, RecordedAt: makerTime,
-			Create: &models.CreateOrderRequest{CommandID: "maker-command", Ticker: "BTC-USD", UserID: "maker", OrderType: models.Limit, Position: models.Ask, Price: 100, Amount: 0.25, Nonce: 1},
+			Create: &models.CreateOrderRequest{CommandID: "maker-command", Ticker: "BTC-USD", UserID: "maker", OrderType: models.Limit, Position: models.Ask, Price: testPrice(100), Amount: testQuantity(0.25), Nonce: 1},
 		},
 		{
 			CommandID: "market-command", Ticker: "BTC-USD", Sequence: 2, Type: journal.CreateCommand, RecordedAt: takerTime,
-			Create: &models.CreateOrderRequest{CommandID: "market-command", Ticker: "BTC-USD", UserID: "taker", OrderType: models.Market, Position: models.Bid, Amount: 1, Nonce: 1},
+			Create: &models.CreateOrderRequest{CommandID: "market-command", Ticker: "BTC-USD", UserID: "taker", OrderType: models.Market, Position: models.Bid, Amount: testQuantity(1), Nonce: 1},
 		},
 	}
 }

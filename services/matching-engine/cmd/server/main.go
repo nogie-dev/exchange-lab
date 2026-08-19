@@ -194,17 +194,21 @@ func startEngine(
 		return nil, fmt.Errorf("load order journal: %w", err)
 	}
 	commandsByTicker := make(map[string][]journal.Command)
+	marketsByTicker := make(map[string]market.Market, len(markets))
 	tickers := make(map[string]struct{}, len(markets)+len(commands))
 	for _, registered := range markets {
 		tickers[registered.Ticker] = struct{}{}
+		marketsByTicker[registered.Ticker] = registered
 	}
 	for _, command := range commands {
 		commandsByTicker[command.Ticker] = append(commandsByTicker[command.Ticker], command)
 		if _, registered := tickers[command.Ticker]; !registered {
-			if _, err := marketStore.Add(ctx, command.Ticker); err != nil {
+			added, err := marketStore.Add(ctx, command.Ticker)
+			if err != nil {
 				cleanup()
 				return nil, fmt.Errorf("persist journal ticker %q: %w", command.Ticker, err)
 			}
+			marketsByTicker[command.Ticker] = added.Market
 		}
 		tickers[command.Ticker] = struct{}{}
 	}
@@ -214,7 +218,7 @@ func startEngine(
 	}
 	sort.Strings(tickerNames)
 	for _, ticker := range tickerNames {
-		if err := runtime.registerTicker(ticker, commandsByTicker[ticker]); err != nil {
+		if err := runtime.registerTicker(marketsByTicker[ticker], commandsByTicker[ticker]); err != nil {
 			cleanup()
 			return nil, fmt.Errorf("restore ticker %q: %w", ticker, err)
 		}
@@ -237,7 +241,8 @@ func (r *engineRuntime) AddTicker(ctx context.Context, ticker string) error {
 	if r.router.HasTicker(ticker) {
 		return fmt.Errorf("%w: %s", engine.ErrTickerExists, ticker)
 	}
-	if _, err := r.marketStore.Add(ctx, ticker); err != nil {
+	added, err := r.marketStore.Add(ctx, ticker)
+	if err != nil {
 		return fmt.Errorf("persist ticker %q: %w", ticker, err)
 	}
 
@@ -251,15 +256,19 @@ func (r *engineRuntime) AddTicker(ctx context.Context, ticker string) error {
 			tickerCommands = append(tickerCommands, command)
 		}
 	}
-	if err := r.registerTicker(ticker, tickerCommands); err != nil {
+	if err := r.registerTicker(added.Market, tickerCommands); err != nil {
 		return fmt.Errorf("restore ticker %q: %w", ticker, err)
 	}
 	return nil
 }
 
-func (r *engineRuntime) registerTicker(ticker string, commands []journal.Command) error {
-	worker := engine.NewBookWorkerWithOptions(ticker, nil, engine.BookWorkerOptions{
+func (r *engineRuntime) registerTicker(registered market.Market, commands []journal.Command) error {
+	if registered.Ticker == "" {
+		return fmt.Errorf("market ticker is required")
+	}
+	worker := engine.NewBookWorkerWithOptions(registered.Ticker, nil, engine.BookWorkerOptions{
 		InputBufferSize: r.workerInputBufferSize,
+		Precision:       registered.Precision,
 		PersistenceOut:  r.persistenceOut,
 		OrderEventOut:   r.orderEventOut,
 		Journal:         r.journalStore,
@@ -267,7 +276,7 @@ func (r *engineRuntime) registerTicker(ticker string, commands []journal.Command
 	if err := worker.Replay(commands); err != nil {
 		return fmt.Errorf("replay order journal: %w", err)
 	}
-	if err := r.router.Register(ticker, worker); err != nil {
+	if err := r.router.Register(registered.Ticker, worker); err != nil {
 		return err
 	}
 	go worker.Run()

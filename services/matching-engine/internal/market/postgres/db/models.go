@@ -9,6 +9,16 @@ import (
 )
 
 type Market struct {
-	Ticker    string             `db:"ticker" json:"ticker"`
-	CreatedAt pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	Ticker          string             `db:"ticker" json:"ticker"`
+	CreatedAt       pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	PriceScale      int16              `db:"price_scale" json:"price_scale"`
+	QuantityScale   int16              `db:"quantity_scale" json:"quantity_scale"`
+	QuoteScale      int16              `db:"quote_scale" json:"quote_scale"`
+	TickSizeUnits   int64              `db:"tick_size_units" json:"tick_size_units"`
+	LotSizeUnits    int64              `db:"lot_size_units" json:"lot_size_units"`
+	MinPriceTicks   int64              `db:"min_price_ticks" json:"min_price_ticks"`
+	MaxPriceTicks   int64              `db:"max_price_ticks" json:"max_price_ticks"`
+	MinQuantityLots int64              `db:"min_quantity_lots" json:"min_quantity_lots"`
+	MaxQuantityLots int64              `db:"max_quantity_lots" json:"max_quantity_lots"`
+	ConfigVersion   int64              `db:"config_version" json:"config_version"`
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/nogie-dev/clob-trading/internal/market"
+	"github.com/nogie-dev/clob-trading/internal/numeric"
 )
 
 type fakeDBTX struct {
@@ -42,6 +43,24 @@ type fakeRow struct {
 	err    error
 }
 
+func marketRow(ticker string, createdAt time.Time) []any {
+	precision := numeric.DefaultPrecision()
+	return []any{
+		ticker,
+		pgtype.Timestamptz{Time: createdAt, Valid: true},
+		int16(precision.PriceScale),
+		int16(precision.QuantityScale),
+		int16(precision.QuoteScale),
+		precision.TickSizeUnits,
+		precision.LotSizeUnits,
+		int64(precision.MinPriceTicks),
+		int64(precision.MaxPriceTicks),
+		int64(precision.MinQuantityLots),
+		int64(precision.MaxQuantityLots),
+		precision.ConfigVersion,
+	}
+}
+
 func (f fakeRow) Scan(dest ...interface{}) error {
 	if f.err != nil {
 		return f.err
@@ -57,9 +76,7 @@ func (f fakeRow) Scan(dest ...interface{}) error {
 
 func TestStoreAddReturnsInsertedMarket(t *testing.T) {
 	createdAt := time.Date(2026, 8, 7, 12, 0, 0, 0, time.UTC)
-	store := NewStore(&fakeDBTX{createValues: []any{
-		"ETH-USD", pgtype.Timestamptz{Time: createdAt, Valid: true},
-	}})
+	store := NewStore(&fakeDBTX{createValues: marketRow("ETH-USD", createdAt)})
 
 	result, err := store.Add(context.Background(), " ETH-USD ")
 	if err != nil {
@@ -74,9 +91,7 @@ func TestStoreAddReturnsExistingMarketOnRetry(t *testing.T) {
 	createdAt := time.Date(2026, 8, 7, 12, 0, 0, 0, time.UTC)
 	store := NewStore(&fakeDBTX{
 		createErr: pgx.ErrNoRows,
-		existing: []any{
-			"ETH-USD", pgtype.Timestamptz{Time: createdAt, Valid: true},
-		},
+		existing:  marketRow("ETH-USD", createdAt),
 	})
 
 	result, err := store.Add(context.Background(), "ETH-USD")

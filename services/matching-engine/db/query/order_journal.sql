@@ -11,19 +11,20 @@ INSERT INTO order_journal (
     ticker,
     sequence,
     command_type,
-    payload
+    payload,
+    market_config_version
 )
-SELECT $1, $2, last_sequence, $3, $4
+SELECT $1, $2, last_sequence, $3, $4, $5
 FROM next_sequence
 ON CONFLICT (command_id) DO NOTHING
 RETURNING sequence, recorded_at;
 
 -- name: GetOrderJournalEntry :one
-SELECT command_id, ticker, sequence, command_type, payload, recorded_at
+SELECT command_id, ticker, sequence, command_type, payload, market_config_version, recorded_at
 FROM order_journal
 WHERE command_id = $1;
 
 -- name: ListOrderJournalEntries :many
-SELECT command_id, ticker, sequence, command_type, payload, recorded_at
+SELECT command_id, ticker, sequence, command_type, payload, market_config_version, recorded_at
 FROM order_journal
 ORDER BY ticker, sequence;

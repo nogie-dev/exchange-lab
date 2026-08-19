@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/nogie-dev/clob-trading/internal/models"
+	"github.com/nogie-dev/clob-trading/internal/numeric"
 )
 
 var (
@@ -27,14 +28,15 @@ const (
 )
 
 type Command struct {
-	CommandID  string
-	Ticker     string
-	Sequence   int64
-	Type       CommandType
-	RecordedAt time.Time
-	Create     *models.CreateOrderRequest
-	Amend      *models.EditOrderRequest
-	Cancel     *models.CancelOrderRequest
+	CommandID           string
+	Ticker              string
+	Sequence            int64
+	Type                CommandType
+	RecordedAt          time.Time
+	MarketConfigVersion int64
+	Create              *models.CreateOrderRequest
+	Amend               *models.EditOrderRequest
+	Cancel              *models.CancelOrderRequest
 }
 
 type AppendResult struct {
@@ -64,12 +66,17 @@ func EncodePayload(command Command) ([]byte, error) {
 }
 
 func Decode(commandID, ticker string, sequence int64, commandType CommandType, payload []byte, recordedAt time.Time) (Command, error) {
+	return DecodeWithVersion(commandID, ticker, sequence, commandType, payload, recordedAt, numeric.DefaultConfigVersion)
+}
+
+func DecodeWithVersion(commandID, ticker string, sequence int64, commandType CommandType, payload []byte, recordedAt time.Time, configVersion int64) (Command, error) {
 	command := Command{
-		CommandID:  commandID,
-		Ticker:     ticker,
-		Sequence:   sequence,
-		Type:       commandType,
-		RecordedAt: recordedAt,
+		CommandID:           commandID,
+		Ticker:              ticker,
+		Sequence:            sequence,
+		Type:                commandType,
+		RecordedAt:          recordedAt,
+		MarketConfigVersion: configVersion,
 	}
 	var destination any
 	switch commandType {
@@ -100,6 +107,8 @@ func Validate(command Command) error {
 		return fmt.Errorf("%w: command id is required", ErrInvalidCommand)
 	case command.Ticker == "":
 		return fmt.Errorf("%w: ticker is required", ErrInvalidCommand)
+	case command.MarketConfigVersion < 0:
+		return fmt.Errorf("%w: market config version cannot be negative", ErrInvalidCommand)
 	}
 
 	var payloadCommandID, payloadTicker string
@@ -155,7 +164,15 @@ func SamePayload(left, right Command) bool {
 	return left.CommandID == right.CommandID &&
 		left.Ticker == right.Ticker &&
 		left.Type == right.Type &&
+		effectiveConfigVersion(left) == effectiveConfigVersion(right) &&
 		reflect.DeepEqual(left.Create, right.Create) &&
 		reflect.DeepEqual(left.Amend, right.Amend) &&
 		reflect.DeepEqual(left.Cancel, right.Cancel)
+}
+
+func effectiveConfigVersion(command Command) int64 {
+	if command.MarketConfigVersion == 0 {
+		return numeric.DefaultConfigVersion
+	}
+	return command.MarketConfigVersion
 }

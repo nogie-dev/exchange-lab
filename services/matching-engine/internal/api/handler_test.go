@@ -13,6 +13,7 @@ import (
 	"github.com/nogie-dev/clob-trading/internal/engine"
 	"github.com/nogie-dev/clob-trading/internal/journal"
 	"github.com/nogie-dev/clob-trading/internal/models"
+	"github.com/nogie-dev/clob-trading/internal/numeric"
 	"github.com/nogie-dev/clob-trading/internal/orderevent"
 )
 
@@ -41,10 +42,26 @@ func (j *testJournal) List(context.Context) ([]journal.Command, error) {
 	return nil, nil
 }
 
+func apiPrice(raw string) numeric.PriceTicks {
+	value, err := numeric.ParseScaled(raw, numeric.DefaultPriceScale)
+	if err != nil {
+		panic(err)
+	}
+	return numeric.PriceTicks(value)
+}
+
+func apiQuantity(raw string) numeric.QuantityLots {
+	value, err := numeric.ParseScaled(raw, numeric.DefaultQuantityScale)
+	if err != nil {
+		panic(err)
+	}
+	return numeric.QuantityLots(value)
+}
+
 func TestOrderBookQuery(t *testing.T) {
 	book := engine.NewOrderBook("BTC-USD")
-	book.AddOrder(&models.BookOrder{OrderID: "bid-1", Ticker: "BTC-USD", UserID: "buyer", OrderType: models.Limit, Position: models.Bid, Price: 100, Amount: 2})
-	book.AddOrder(&models.BookOrder{OrderID: "ask-1", Ticker: "BTC-USD", UserID: "seller", OrderType: models.Limit, Position: models.Ask, Price: 101, Amount: 3})
+	book.AddOrder(&models.BookOrder{OrderID: "bid-1", Ticker: "BTC-USD", UserID: "buyer", OrderType: models.Limit, Position: models.Bid, Price: apiPrice("100"), Amount: apiQuantity("2")})
+	book.AddOrder(&models.BookOrder{OrderID: "ask-1", Ticker: "BTC-USD", UserID: "seller", OrderType: models.Limit, Position: models.Ask, Price: apiPrice("101"), Amount: apiQuantity("3")})
 	handler, _ := newTestHandler(t, book)
 
 	request := httptest.NewRequest(http.MethodGet, "/queries/orderbook?ticker=BTC-USD&depth=1", nil)
@@ -59,17 +76,17 @@ func TestOrderBookQuery(t *testing.T) {
 	}
 
 	body := response.Body.Bytes()
-	var snapshot engine.OrderBookSnapshot
+	var snapshot orderBookResponse
 	if err := json.Unmarshal(body, &snapshot); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
 	if snapshot.Ticker != "BTC-USD" || len(snapshot.Bids) != 1 || len(snapshot.Asks) != 1 {
 		t.Fatalf("unexpected snapshot: %#v", snapshot)
 	}
-	if snapshot.Bids[0].Price != 100 || snapshot.Bids[0].Amount != 2 {
+	if snapshot.Bids[0].Price != "100" || snapshot.Bids[0].Amount != "2" {
 		t.Fatalf("unexpected best bid: %#v", snapshot.Bids[0])
 	}
-	if snapshot.Asks[0].Price != 101 || snapshot.Asks[0].Amount != 3 {
+	if snapshot.Asks[0].Price != "101" || snapshot.Asks[0].Amount != "3" {
 		t.Fatalf("unexpected best ask: %#v", snapshot.Asks[0])
 	}
 	if !bytes.Contains(body, []byte(`"cumulativeAmount":`)) {
@@ -85,8 +102,8 @@ func TestCreateOrderCommand(t *testing.T) {
 		"user_id":"alice",
 		"order_type":"LIMIT",
 		"position":"BID",
-		"price":100,
-		"amount":2,
+		"price":"100",
+		"amount":"2",
 		"nonce":1
 	}`)
 
@@ -99,7 +116,7 @@ func TestCreateOrderCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OrderBookSnapshot returned error: %v", err)
 	}
-	if len(snapshot.Bids) != 1 || snapshot.Bids[0].Amount != 2 {
+	if len(snapshot.Bids) != 1 || snapshot.Bids[0].Amount != apiQuantity("2") {
 		t.Fatalf("create command was not processed: %#v", snapshot)
 	}
 }
@@ -112,7 +129,7 @@ func TestCreateMarketOrderWithoutPrice(t *testing.T) {
 		"user_id":"alice",
 		"order_type":"MARKET",
 		"position":"BID",
-		"amount":2,
+		"amount":"2",
 		"nonce":1
 	}`)
 
@@ -132,20 +149,11 @@ func TestCreateMarketOrderWithoutPrice(t *testing.T) {
 
 func TestAmendAndCancelOrderCommands(t *testing.T) {
 	book := engine.NewOrderBook("BTC-USD")
-	book.AddOrder(&models.BookOrder{OrderID: "bid-1", Ticker: "BTC-USD", UserID: "alice", OrderType: models.Limit, Position: models.Bid, Price: 100, Amount: 2})
+	book.AddOrder(&models.BookOrder{OrderID: "bid-1", Ticker: "BTC-USD", UserID: "alice", OrderType: models.Limit, Position: models.Bid, Price: apiPrice("100"), Amount: apiQuantity("2")})
 	handler, router := newTestHandler(t, book)
 
-	amendedAmount := 1.0
-	amendBody, err := json.Marshal(models.EditOrderRequest{
-		CommandID: "amend-1",
-		Ticker:    "BTC-USD",
-		OrderID:   "bid-1",
-		Price:     100,
-		Amount:    &amendedAmount,
-	})
-	if err != nil {
-		t.Fatalf("marshal amend request: %v", err)
-	}
+	amendedAmount := apiQuantity("1")
+	amendBody := []byte(`{"command_id":"amend-1","ticker":"BTC-USD","order_id":"bid-1","price":"100","amount":"1"}`)
 	response := serveJSON(handler, "/commands/orders/amend", amendBody)
 	if response.Code != http.StatusAccepted {
 		t.Fatalf("amend status want %d, got %d: %s", http.StatusAccepted, response.Code, response.Body.String())
@@ -218,12 +226,12 @@ func TestHandlerRejectsInvalidRequestsAndUnknownTickers(t *testing.T) {
 		{name: "unknown query ticker", method: http.MethodGet, target: "/queries/orderbook?ticker=ETH-USD&depth=1", status: http.StatusNotFound},
 		{name: "malformed create", method: http.MethodPost, target: "/commands/orders/create", body: `{`, status: http.StatusBadRequest},
 		{name: "invalid create", method: http.MethodPost, target: "/commands/orders/create", body: `{"ticker":"BTC-USD"}`, status: http.StatusBadRequest},
-		{name: "limit order without price", method: http.MethodPost, target: "/commands/orders/create", body: `{"command_id":"create-1","ticker":"BTC-USD","user_id":"alice","order_type":"LIMIT","position":"BID","amount":1}`, status: http.StatusBadRequest},
-		{name: "market order with price", method: http.MethodPost, target: "/commands/orders/create", body: `{"command_id":"create-1","ticker":"BTC-USD","user_id":"alice","order_type":"MARKET","position":"BID","price":100,"amount":1}`, status: http.StatusBadRequest},
-		{name: "market order with negative price", method: http.MethodPost, target: "/commands/orders/create", body: `{"command_id":"create-1","ticker":"BTC-USD","user_id":"alice","order_type":"MARKET","position":"BID","price":-1,"amount":1}`, status: http.StatusBadRequest},
-		{name: "unknown order type", method: http.MethodPost, target: "/commands/orders/create", body: `{"command_id":"create-1","ticker":"BTC-USD","user_id":"alice","order_type":"STOP","position":"BID","price":100,"amount":1}`, status: http.StatusBadRequest},
-		{name: "unknown create ticker", method: http.MethodPost, target: "/commands/orders/create", body: `{"command_id":"create-1","ticker":"ETH-USD","user_id":"alice","order_type":"LIMIT","position":"BID","price":100,"amount":1}`, status: http.StatusNotFound},
-		{name: "invalid amend", method: http.MethodPost, target: "/commands/orders/amend", body: `{"command_id":"amend-1","ticker":"BTC-USD","order_id":"id","price":100,"amount":0}`, status: http.StatusBadRequest},
+		{name: "limit order without price", method: http.MethodPost, target: "/commands/orders/create", body: `{"command_id":"create-1","ticker":"BTC-USD","user_id":"alice","order_type":"LIMIT","position":"BID","amount":"1"}`, status: http.StatusBadRequest},
+		{name: "market order with price", method: http.MethodPost, target: "/commands/orders/create", body: `{"command_id":"create-1","ticker":"BTC-USD","user_id":"alice","order_type":"MARKET","position":"BID","price":"100","amount":"1"}`, status: http.StatusBadRequest},
+		{name: "market order with negative price", method: http.MethodPost, target: "/commands/orders/create", body: `{"command_id":"create-1","ticker":"BTC-USD","user_id":"alice","order_type":"MARKET","position":"BID","price":"-1","amount":"1"}`, status: http.StatusBadRequest},
+		{name: "unknown order type", method: http.MethodPost, target: "/commands/orders/create", body: `{"command_id":"create-1","ticker":"BTC-USD","user_id":"alice","order_type":"STOP","position":"BID","price":"100","amount":"1"}`, status: http.StatusBadRequest},
+		{name: "unknown create ticker", method: http.MethodPost, target: "/commands/orders/create", body: `{"command_id":"create-1","ticker":"ETH-USD","user_id":"alice","order_type":"LIMIT","position":"BID","price":"100","amount":"1"}`, status: http.StatusNotFound},
+		{name: "invalid amend", method: http.MethodPost, target: "/commands/orders/amend", body: `{"command_id":"amend-1","ticker":"BTC-USD","order_id":"id","price":"100","amount":"0"}`, status: http.StatusBadRequest},
 		{name: "invalid cancel", method: http.MethodPost, target: "/commands/orders/cancel", body: `{"command_id":"cancel-1","ticker":"BTC-USD"}`, status: http.StatusBadRequest},
 	}
 
@@ -274,8 +282,8 @@ func TestReadinessAndCommandsFailWhenEngineHalted(t *testing.T) {
 		"user_id":"alice",
 		"order_type":"LIMIT",
 		"position":"BID",
-		"price":100,
-		"amount":1,
+		"price":"100",
+		"amount":"1",
 		"nonce":1
 	}`))
 	if response.Code != http.StatusServiceUnavailable {

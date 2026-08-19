@@ -1,17 +1,19 @@
 package engine
 
 import (
+	"fmt"
 	"log/slog"
-	"math"
 
 	"github.com/nogie-dev/clob-trading/internal/matchlog"
 	"github.com/nogie-dev/clob-trading/internal/models"
+	"github.com/nogie-dev/clob-trading/internal/numeric"
 )
 
 type MatchResult struct {
 	Residual         *models.BookOrder
 	Logs             []matchlog.MatchLog
 	MakerTransitions []MakerFillTransition
+	Err              error
 }
 
 // MakerFillTransition captures one maker's quantity change for one execution.
@@ -20,9 +22,9 @@ type MatchResult struct {
 // separately from its original and residual amounts.
 type MakerFillTransition struct {
 	Order           models.BookOrder
-	PreviousAmount  float64
-	FilledAmount    float64
-	RemainingAmount float64
+	PreviousAmount  numeric.QuantityLots
+	FilledAmount    numeric.QuantityLots
+	RemainingAmount numeric.QuantityLots
 }
 
 // Match consumes an incoming order against the provided orderbook.
@@ -54,17 +56,23 @@ func Match(book *OrderBook, incoming *models.BookOrder) MatchResult {
 				break
 			}
 
+			tradeAmount := minQuantity(incoming.Amount, target.Amount)
+			logEntry, err := newMatchLog(book, incoming, target, bestAsk.Price, tradeAmount, len(result.Logs))
+			if err != nil {
+				result.Err = err
+				result.Residual = incoming
+				return result
+			}
 			before := *target
-			tradeAmt := math.Min(incoming.Amount, target.Amount)
-			logTradeExecuted(incoming.Ticker, incoming.OrderID, target.OrderID, bestAsk.Price, tradeAmt)
-			result.Logs = append(result.Logs, newMatchLog(book.Ticker, incoming, target, bestAsk.Price, tradeAmt, len(result.Logs)))
-			incoming.Amount -= tradeAmt
-			target.Amount -= tradeAmt
-			bestAsk.TotalAmount -= tradeAmt
+			logTradeExecuted(incoming.Ticker, incoming.OrderID, target.OrderID, bestAsk.Price, tradeAmount)
+			result.Logs = append(result.Logs, logEntry)
+			incoming.Amount -= tradeAmount
+			target.Amount -= tradeAmount
+			bestAsk.TotalAmount -= tradeAmount
 			result.MakerTransitions = append(result.MakerTransitions, MakerFillTransition{
 				Order:           before,
 				PreviousAmount:  before.Amount,
-				FilledAmount:    tradeAmt,
+				FilledAmount:    tradeAmount,
 				RemainingAmount: target.Amount,
 			})
 
@@ -93,17 +101,23 @@ func Match(book *OrderBook, incoming *models.BookOrder) MatchResult {
 				break
 			}
 
+			tradeAmount := minQuantity(incoming.Amount, target.Amount)
+			logEntry, err := newMatchLog(book, incoming, target, bestBid.Price, tradeAmount, len(result.Logs))
+			if err != nil {
+				result.Err = err
+				result.Residual = incoming
+				return result
+			}
 			before := *target
-			tradeAmt := math.Min(incoming.Amount, target.Amount)
-			logTradeExecuted(incoming.Ticker, incoming.OrderID, target.OrderID, bestBid.Price, tradeAmt)
-			result.Logs = append(result.Logs, newMatchLog(book.Ticker, incoming, target, bestBid.Price, tradeAmt, len(result.Logs)))
-			incoming.Amount -= tradeAmt
-			target.Amount -= tradeAmt
-			bestBid.TotalAmount -= tradeAmt
+			logTradeExecuted(incoming.Ticker, incoming.OrderID, target.OrderID, bestBid.Price, tradeAmount)
+			result.Logs = append(result.Logs, logEntry)
+			incoming.Amount -= tradeAmount
+			target.Amount -= tradeAmount
+			bestBid.TotalAmount -= tradeAmount
 			result.MakerTransitions = append(result.MakerTransitions, MakerFillTransition{
 				Order:           before,
 				PreviousAmount:  before.Amount,
-				FilledAmount:    tradeAmt,
+				FilledAmount:    tradeAmount,
 				RemainingAmount: target.Amount,
 			})
 
@@ -124,7 +138,14 @@ func Match(book *OrderBook, incoming *models.BookOrder) MatchResult {
 	return result
 }
 
-func canMatchAtPrice(incoming *models.BookOrder, oppositePrice float64) bool {
+func minQuantity(left, right numeric.QuantityLots) numeric.QuantityLots {
+	if left < right {
+		return left
+	}
+	return right
+}
+
+func canMatchAtPrice(incoming *models.BookOrder, oppositePrice numeric.PriceTicks) bool {
 	if incoming.OrderType == models.Market {
 		return true
 	}
@@ -135,19 +156,24 @@ func canMatchAtPrice(incoming *models.BookOrder, oppositePrice float64) bool {
 	return incoming.Price <= oppositePrice
 }
 
-func newMatchLog(ticker string, taker, maker *models.BookOrder, price, amount float64, sequence int) matchlog.MatchLog {
-	return matchlog.MatchLog{
-		ExecutionID:  matchlog.GenerateExecutionID(ticker, taker.OrderID, taker.Timestamp, sequence),
-		Ticker:       ticker,
-		Price:        price,
-		Amount:       amount,
-		QuoteAmount:  price * amount,
-		MakerOrderID: maker.OrderID,
-		TakerOrderID: taker.OrderID,
-		MakerUserID:  maker.UserID,
-		TakerUserID:  taker.UserID,
-		MakerSide:    maker.Position,
-		TakerSide:    taker.Position,
-		MatchedAt:    taker.Timestamp,
+func newMatchLog(book *OrderBook, taker, maker *models.BookOrder, price numeric.PriceTicks, amount numeric.QuantityLots, sequence int) (matchlog.MatchLog, error) {
+	quoteAmount, err := book.Precision.QuoteAmount(price, amount)
+	if err != nil {
+		return matchlog.MatchLog{}, fmt.Errorf("calculate quote amount: %w", err)
 	}
+	return matchlog.MatchLog{
+		ExecutionID:         matchlog.GenerateExecutionID(book.Ticker, taker.OrderID, taker.Timestamp, sequence),
+		Ticker:              book.Ticker,
+		Price:               price,
+		Amount:              amount,
+		QuoteAmount:         quoteAmount,
+		MarketConfigVersion: book.Precision.ConfigVersion,
+		MakerOrderID:        maker.OrderID,
+		TakerOrderID:        taker.OrderID,
+		MakerUserID:         maker.UserID,
+		TakerUserID:         taker.UserID,
+		MakerSide:           maker.Position,
+		TakerSide:           taker.Position,
+		MatchedAt:           taker.Timestamp,
+	}, nil
 }
