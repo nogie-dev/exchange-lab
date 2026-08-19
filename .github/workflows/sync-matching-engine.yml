@@ -1,0 +1,70 @@
+name: Sync matching-engine subtree
+
+on:
+  repository_dispatch:
+    types:
+      - matching-engine-updated
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: matching-engine-subtree-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Open subtree sync PR
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout exchange-lab
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch matching-engine main
+        env:
+          MATCHING_ENGINE_SYNC_TOKEN: ${{ secrets.MATCHING_ENGINE_SYNC_TOKEN }}
+        run: |
+          if [ -z "$MATCHING_ENGINE_SYNC_TOKEN" ]; then
+            echo "::error::MATCHING_ENGINE_SYNC_TOKEN is not configured"
+            exit 1
+          fi
+          git remote add matching-engine "https://x-access-token:${MATCHING_ENGINE_SYNC_TOKEN}@github.com/nogie-dev/matching-engine.git"
+          git fetch --no-tags matching-engine main
+
+      - name: Create subtree sync branch
+        id: sync
+        env:
+          BRANCH: chore/sync-matching-engine-${{ github.run_id }}
+        run: |
+          base_sha=$(git rev-parse origin/main)
+          git switch --create "$BRANCH" origin/main
+          git subtree pull --prefix=services/matching-engine matching-engine main --squash
+          if [ "$(git rev-parse HEAD)" = "$base_sha" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git push --set-upstream origin "$BRANCH"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Open pull request
+        if: steps.sync.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ steps.sync.outputs.branch }}
+        run: |
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "Chore: sync matching-engine subtree" \
+            --body "Automated subtree sync from nogie-dev/matching-engine main."
