@@ -1,17 +1,10 @@
 package engine
 
 import (
-	"math"
 	"testing"
 
 	"github.com/nogie-dev/clob-trading/internal/models"
 )
-
-const epsilon = 1e-9
-
-func approxEqual(a, b float64) bool {
-	return math.Abs(a-b) < epsilon
-}
 
 // --- 가격 불일치: 체결 없음 ---
 
@@ -26,10 +19,10 @@ func TestMatchNoMatch_BidBelowAsk(t *testing.T) {
 	if result.Residual == nil {
 		t.Fatal("expected no match, got full fill")
 	}
-	if result.Residual.Amount != 1.0 {
+	if result.Residual.Amount != testQuantity(1.0) {
 		t.Fatalf("result.Residual amount want 1.0, got %v", result.Residual.Amount)
 	}
-	if _, ok := ob.Asks[101]; !ok {
+	if _, ok := ob.Asks[testPrice(101)]; !ok {
 		t.Fatal("ask level should remain on book")
 	}
 	if len(result.MakerTransitions) != 0 {
@@ -48,10 +41,10 @@ func TestMatchNoMatch_AskAboveBid(t *testing.T) {
 	if result.Residual == nil {
 		t.Fatal("expected no match, got full fill")
 	}
-	if result.Residual.Amount != 1.0 {
+	if result.Residual.Amount != testQuantity(1.0) {
 		t.Fatalf("result.Residual amount want 1.0, got %v", result.Residual.Amount)
 	}
-	if _, ok := ob.Bids[100]; !ok {
+	if _, ok := ob.Bids[testPrice(100)]; !ok {
 		t.Fatal("bid level should remain on book")
 	}
 }
@@ -70,7 +63,7 @@ func TestMatchFullFill_BidTaker(t *testing.T) {
 	if result.Residual != nil {
 		t.Fatalf("expected full fill, got result.Residual amount %v", result.Residual.Amount)
 	}
-	if maker.Amount != 0 {
+	if maker.Amount != testQuantity(0) {
 		t.Fatalf("maker should be fully filled, got %v", maker.Amount)
 	}
 	if len(ob.Asks) != 0 {
@@ -90,7 +83,7 @@ func TestMatchFullFill_AskTaker(t *testing.T) {
 	if result.Residual != nil {
 		t.Fatalf("expected full fill, got result.Residual amount %v", result.Residual.Amount)
 	}
-	if maker.Amount != 0 {
+	if maker.Amount != testQuantity(0) {
 		t.Fatalf("maker should be fully filled, got %v", maker.Amount)
 	}
 	if len(ob.Bids) != 0 {
@@ -112,11 +105,11 @@ func TestMatchPartialFill_TakerLarger(t *testing.T) {
 	if result.Residual == nil {
 		t.Fatal("expected partial fill result.Residual, got nil")
 	}
-	wantResidual := 0.7
+	wantResidual := testQuantity(0.7)
 	if result.Residual.Amount != wantResidual {
 		t.Fatalf("result.Residual amount want %v, got %v", wantResidual, result.Residual.Amount)
 	}
-	if maker.Amount != 0 {
+	if maker.Amount != testQuantity(0) {
 		t.Fatalf("maker should be fully consumed, got %v", maker.Amount)
 	}
 	if len(ob.Asks) != 0 {
@@ -138,11 +131,11 @@ func TestMatchPartialFill_MakerLarger(t *testing.T) {
 	if result.Residual != nil {
 		t.Fatalf("taker should be fully filled, got result.Residual %v", result.Residual.Amount)
 	}
-	wantMakerRemain := 0.6
+	wantMakerRemain := testQuantity(0.6)
 	if maker.Amount != wantMakerRemain {
 		t.Fatalf("maker remaining want %v, got %v", wantMakerRemain, maker.Amount)
 	}
-	lvl, ok := ob.Asks[100]
+	lvl, ok := ob.Asks[testPrice(100)]
 	if !ok {
 		t.Fatal("ask level should remain on book")
 	}
@@ -167,18 +160,18 @@ func TestMatchMultiLevel_BidSweepsAsks(t *testing.T) {
 	if result.Residual != nil {
 		t.Fatalf("taker should be fully filled, got result.Residual %v", result.Residual.Amount)
 	}
-	if _, ok := ob.Asks[100]; ok {
+	if _, ok := ob.Asks[testPrice(100)]; ok {
 		t.Fatal("ask@100 should be fully consumed")
 	}
-	lvl101, ok := ob.Asks[101]
+	lvl101, ok := ob.Asks[testPrice(101)]
 	if !ok {
 		t.Fatal("ask@101 should remain partially")
 	}
-	wantRemain := 0.1
+	wantRemain := testQuantity(0.1)
 	if !approxEqual(lvl101.TotalAmount, wantRemain) {
 		t.Fatalf("remaining want %v, got %v", wantRemain, lvl101.TotalAmount)
 	}
-	if _, ok := ob.Asks[102]; !ok {
+	if _, ok := ob.Asks[testPrice(102)]; !ok {
 		t.Fatal("ask@102 should be untouched")
 	}
 }
@@ -197,18 +190,18 @@ func TestMatchMultiLevel_AskSweepsBids(t *testing.T) {
 	if result.Residual != nil {
 		t.Fatalf("taker should be fully filled, got result.Residual %v", result.Residual.Amount)
 	}
-	if _, ok := ob.Bids[102]; ok {
+	if _, ok := ob.Bids[testPrice(102)]; ok {
 		t.Fatal("bid@102 should be fully consumed")
 	}
-	lvl101, ok := ob.Bids[101]
+	lvl101, ok := ob.Bids[testPrice(101)]
 	if !ok {
 		t.Fatal("bid@101 should remain partially")
 	}
-	wantRemain := 0.1
+	wantRemain := testQuantity(0.1)
 	if !approxEqual(lvl101.TotalAmount, wantRemain) {
 		t.Fatalf("remaining want %v, got %v", wantRemain, lvl101.TotalAmount)
 	}
-	if _, ok := ob.Bids[100]; !ok {
+	if _, ok := ob.Bids[testPrice(100)]; !ok {
 		t.Fatal("bid@100 should be untouched")
 	}
 }
@@ -225,13 +218,13 @@ func TestMatchMarketOrderSweepsAvailableAskLevels(t *testing.T) {
 	if result.Residual != nil {
 		t.Fatalf("market order should be fully filled when liquidity is available, got residual %v", result.Residual.Amount)
 	}
-	if len(result.Logs) != 2 || result.Logs[0].Price != 100 || result.Logs[1].Price != 101 {
+	if len(result.Logs) != 2 || result.Logs[0].Price != testPrice(100) || result.Logs[1].Price != testPrice(101) {
 		t.Fatalf("market order should consume best asks in order, got logs %#v", result.Logs)
 	}
-	if _, ok := ob.Asks[100]; ok {
+	if _, ok := ob.Asks[testPrice(100)]; ok {
 		t.Fatal("best ask should be fully consumed")
 	}
-	if lvl, ok := ob.Asks[101]; !ok || !approxEqual(lvl.TotalAmount, 0.1) {
+	if lvl, ok := ob.Asks[testPrice(101)]; !ok || !approxEqual(lvl.TotalAmount, 0.1) {
 		t.Fatalf("remaining ask@101 want 0.1, got %#v", lvl)
 	}
 }
@@ -248,13 +241,13 @@ func TestMatchMarketSellSweepsAvailableBidLevels(t *testing.T) {
 	if result.Residual != nil {
 		t.Fatalf("market order should be fully filled when liquidity is available, got residual %v", result.Residual.Amount)
 	}
-	if len(result.Logs) != 2 || result.Logs[0].Price != 102 || result.Logs[1].Price != 101 {
+	if len(result.Logs) != 2 || result.Logs[0].Price != testPrice(102) || result.Logs[1].Price != testPrice(101) {
 		t.Fatalf("market order should consume best bids in order, got logs %#v", result.Logs)
 	}
-	if _, ok := ob.Bids[102]; ok {
+	if _, ok := ob.Bids[testPrice(102)]; ok {
 		t.Fatal("best bid should be fully consumed")
 	}
-	if lvl, ok := ob.Bids[101]; !ok || !approxEqual(lvl.TotalAmount, 0.1) {
+	if lvl, ok := ob.Bids[testPrice(101)]; !ok || !approxEqual(lvl.TotalAmount, 0.1) {
 		t.Fatalf("remaining bid@101 want 0.1, got %#v", lvl)
 	}
 }
@@ -270,7 +263,7 @@ func TestMatchMarketOrderReturnsUnfilledResidual(t *testing.T) {
 	if result.Residual == nil || !approxEqual(result.Residual.Amount, 0.7) {
 		t.Fatalf("market residual want 0.7, got %#v", result.Residual)
 	}
-	if _, ok := ob.Asks[100]; ok {
+	if _, ok := ob.Asks[testPrice(100)]; ok {
 		t.Fatal("available ask should be consumed before residual cancellation")
 	}
 }
@@ -282,7 +275,7 @@ func TestMatchMarketOrderWithoutLiquidityReturnsFullResidual(t *testing.T) {
 
 	result := Match(ob, taker)
 
-	if result.Residual == nil || result.Residual.Amount != 1.0 {
+	if result.Residual == nil || result.Residual.Amount != testQuantity(1.0) {
 		t.Fatalf("market residual want 1.0, got %#v", result.Residual)
 	}
 	if len(result.Logs) != 0 {
@@ -309,10 +302,10 @@ func TestMatchPricePriority(t *testing.T) {
 		t.Fatalf("taker should be fully filled, got result.Residual %v", result.Residual.Amount)
 	}
 	// 100이 먼저 소진돼야 함
-	if _, ok := ob.Asks[100]; ok {
+	if _, ok := ob.Asks[testPrice(100)]; ok {
 		t.Fatal("ask@100 (best price) should be consumed first")
 	}
-	if _, ok := ob.Asks[101]; !ok {
+	if _, ok := ob.Asks[testPrice(101)]; !ok {
 		t.Fatal("ask@101 should remain untouched")
 	}
 }
@@ -334,10 +327,10 @@ func TestMatchTimePriority_FIFO(t *testing.T) {
 		t.Fatalf("taker should be fully filled, got result.Residual %v", result.Residual.Amount)
 	}
 	// first가 소진되고 second는 그대로
-	if first.Amount != 0 {
+	if first.Amount != testQuantity(0) {
 		t.Fatalf("first order should be consumed, got amount %v", first.Amount)
 	}
-	if second.Amount != 0.5 {
+	if second.Amount != testQuantity(0.5) {
 		t.Fatalf("second order should be untouched, got amount %v", second.Amount)
 	}
 }
@@ -361,9 +354,9 @@ func TestMatchReturnsRawMatchLogs(t *testing.T) {
 	log := result.Logs[0]
 	if log.ExecutionID == "" ||
 		log.Ticker != "BTC-USD" ||
-		log.Price != 100 ||
-		log.Amount != 0.25 ||
-		log.QuoteAmount != 25 ||
+		log.Price != testPrice(100) ||
+		log.Amount != testQuantity(0.25) ||
+		log.QuoteAmount != testQuote(25) ||
 		log.MakerOrderID != "ask-1" ||
 		log.TakerOrderID != "bid-1" ||
 		log.MakerUserID != "maker-user" ||
@@ -420,7 +413,7 @@ func assertFillTransition(t *testing.T, transition MakerFillTransition, orderID 
 		!approxEqual(transition.PreviousAmount, previous) ||
 		!approxEqual(transition.FilledAmount, filled) ||
 		!approxEqual(transition.RemainingAmount, remaining) ||
-		!approxEqual(transition.PreviousAmount, transition.FilledAmount+transition.RemainingAmount) {
+		transition.PreviousAmount != transition.FilledAmount+transition.RemainingAmount {
 		t.Fatalf("unexpected fill transition: %#v", transition)
 	}
 }

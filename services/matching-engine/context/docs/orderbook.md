@@ -12,11 +12,15 @@ Core files:
 Invariants:
 
 - `OrderBook.Bids` and `OrderBook.Asks` map price to `PriceLevel`.
+- Prices are `numeric.PriceTicks`; order amounts and level totals are
+  `numeric.QuantityLots`, never `float64`.
 - `bidLevels` is a max heap; `askLevels` is a min heap.
 - `OrderBook.Index` maps `orderID` to the queue element for O(1) lookup.
 - Each `PriceLevel.Queue` preserves FIFO within the same price.
 - `PriceLevel.TotalAmount` must equal the live order amount at that level.
 - Empty price levels must leave both the heap and side map.
+- `OrderBook.Precision` identifies the market configuration used for derived
+  quote amounts and formatted query responses.
 
 Edit rules:
 

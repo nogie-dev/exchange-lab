@@ -13,18 +13,35 @@ const createMarket = `-- name: CreateMarket :one
 INSERT INTO markets (ticker)
 VALUES ($1)
 ON CONFLICT (ticker) DO NOTHING
-RETURNING ticker, created_at
+RETURNING ticker, created_at, price_scale, quantity_scale, quote_scale,
+    tick_size_units, lot_size_units, min_price_ticks, max_price_ticks,
+    min_quantity_lots, max_quantity_lots, config_version
 `
 
 func (q *Queries) CreateMarket(ctx context.Context, ticker string) (Market, error) {
 	row := q.db.QueryRow(ctx, createMarket, ticker)
 	var i Market
-	err := row.Scan(&i.Ticker, &i.CreatedAt)
+	err := row.Scan(
+		&i.Ticker,
+		&i.CreatedAt,
+		&i.PriceScale,
+		&i.QuantityScale,
+		&i.QuoteScale,
+		&i.TickSizeUnits,
+		&i.LotSizeUnits,
+		&i.MinPriceTicks,
+		&i.MaxPriceTicks,
+		&i.MinQuantityLots,
+		&i.MaxQuantityLots,
+		&i.ConfigVersion,
+	)
 	return i, err
 }
 
 const getMarket = `-- name: GetMarket :one
-SELECT ticker, created_at
+SELECT ticker, created_at, price_scale, quantity_scale, quote_scale,
+    tick_size_units, lot_size_units, min_price_ticks, max_price_ticks,
+    min_quantity_lots, max_quantity_lots, config_version
 FROM markets
 WHERE ticker = $1
 `
@@ -32,12 +49,27 @@ WHERE ticker = $1
 func (q *Queries) GetMarket(ctx context.Context, ticker string) (Market, error) {
 	row := q.db.QueryRow(ctx, getMarket, ticker)
 	var i Market
-	err := row.Scan(&i.Ticker, &i.CreatedAt)
+	err := row.Scan(
+		&i.Ticker,
+		&i.CreatedAt,
+		&i.PriceScale,
+		&i.QuantityScale,
+		&i.QuoteScale,
+		&i.TickSizeUnits,
+		&i.LotSizeUnits,
+		&i.MinPriceTicks,
+		&i.MaxPriceTicks,
+		&i.MinQuantityLots,
+		&i.MaxQuantityLots,
+		&i.ConfigVersion,
+	)
 	return i, err
 }
 
 const listMarkets = `-- name: ListMarkets :many
-SELECT ticker, created_at
+SELECT ticker, created_at, price_scale, quantity_scale, quote_scale,
+    tick_size_units, lot_size_units, min_price_ticks, max_price_ticks,
+    min_quantity_lots, max_quantity_lots, config_version
 FROM markets
 ORDER BY ticker
 `
@@ -51,7 +83,20 @@ func (q *Queries) ListMarkets(ctx context.Context) ([]Market, error) {
 	var items []Market
 	for rows.Next() {
 		var i Market
-		if err := rows.Scan(&i.Ticker, &i.CreatedAt); err != nil {
+		if err := rows.Scan(
+			&i.Ticker,
+			&i.CreatedAt,
+			&i.PriceScale,
+			&i.QuantityScale,
+			&i.QuoteScale,
+			&i.TickSizeUnits,
+			&i.LotSizeUnits,
+			&i.MinPriceTicks,
+			&i.MaxPriceTicks,
+			&i.MinQuantityLots,
+			&i.MaxQuantityLots,
+			&i.ConfigVersion,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

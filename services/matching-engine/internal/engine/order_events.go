@@ -5,6 +5,7 @@ import (
 
 	"github.com/nogie-dev/clob-trading/internal/journal"
 	"github.com/nogie-dev/clob-trading/internal/models"
+	"github.com/nogie-dev/clob-trading/internal/numeric"
 	"github.com/nogie-dev/clob-trading/internal/orderevent"
 )
 
@@ -37,7 +38,7 @@ func (b *orderEventBuilder) addMakerFills(transitions []MakerFillTransition) {
 	}
 }
 
-func (b *orderEventBuilder) addTakerFill(order models.BookOrder, filledAmount, remainingAmount float64) {
+func (b *orderEventBuilder) addTakerFill(order models.BookOrder, filledAmount, remainingAmount numeric.QuantityLots) {
 	if filledAmount <= 0 {
 		return
 	}
@@ -98,7 +99,7 @@ func (b *orderEventBuilder) addCanceled(order models.BookOrder) {
 	})
 }
 
-func (b *orderEventBuilder) addRemainderCanceled(order models.BookOrder, remainingAmount float64) {
+func (b *orderEventBuilder) addRemainderCanceled(order models.BookOrder, remainingAmount numeric.QuantityLots) {
 	b.add(order, orderevent.Event{
 		Type:           orderevent.RemainderCanceled,
 		Reason:         orderevent.ReasonInsufficientLiquidity,
@@ -120,6 +121,7 @@ func (b *orderEventBuilder) add(order models.BookOrder, event orderevent.Event) 
 	event.OrderType = order.OrderType
 	event.Side = order.Position
 	event.OccurredAt = b.command.RecordedAt
+	event.MarketConfigVersion = b.command.MarketConfigVersion
 	event.EventID = orderevent.GenerateEventID(event.Ticker, event.CommandID, event.OrderID, event.Type, event.EventIndex)
 	b.events = append(b.events, event)
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/nogie-dev/clob-trading/internal/numeric"
 	"github.com/nogie-dev/clob-trading/internal/orderevent"
 	"github.com/nogie-dev/clob-trading/internal/orderevent/postgres/db"
 )
@@ -89,24 +90,29 @@ func eventParams(event orderevent.Event) (db.CreateOrderEventParams, error) {
 	if err := orderevent.Validate(event); err != nil {
 		return db.CreateOrderEventParams{}, err
 	}
+	configVersion := event.MarketConfigVersion
+	if configVersion == 0 {
+		configVersion = numeric.DefaultConfigVersion
+	}
 	return db.CreateOrderEventParams{
-		EventID:         event.EventID,
-		CommandID:       event.CommandID,
-		CommandSequence: event.CommandSequence,
-		EventIndex:      event.EventIndex,
-		OrderID:         event.OrderID,
-		UserID:          event.UserID,
-		Ticker:          event.Ticker,
-		EventType:       string(event.Type),
-		Reason:          event.Reason,
-		OrderType:       string(event.OrderType),
-		Side:            string(event.Side),
-		PreviousPrice:   event.PreviousPrice,
-		Price:           event.Price,
-		PreviousAmount:  event.PreviousAmount,
-		FilledAmount:    event.FilledAmount,
-		CanceledAmount:  event.CanceledAmount,
-		RemainingAmount: event.RemainingAmount,
+		EventID:             event.EventID,
+		CommandID:           event.CommandID,
+		CommandSequence:     event.CommandSequence,
+		EventIndex:          event.EventIndex,
+		OrderID:             event.OrderID,
+		UserID:              event.UserID,
+		Ticker:              event.Ticker,
+		EventType:           string(event.Type),
+		Reason:              event.Reason,
+		OrderType:           string(event.OrderType),
+		Side:                string(event.Side),
+		PreviousPriceTicks:  int64(event.PreviousPrice),
+		PriceTicks:          int64(event.Price),
+		PreviousAmountLots:  int64(event.PreviousAmount),
+		FilledAmountLots:    int64(event.FilledAmount),
+		CanceledAmountLots:  int64(event.CanceledAmount),
+		RemainingAmountLots: int64(event.RemainingAmount),
+		MarketConfigVersion: configVersion,
 		OccurredAt: pgtype.Timestamptz{
 			Time:  event.OccurredAt.UTC(),
 			Valid: true,
@@ -116,23 +122,24 @@ func eventParams(event orderevent.Event) (db.CreateOrderEventParams, error) {
 
 func eventPayloadParams(param db.CreateOrderEventParams) db.OrderEventPayloadMatchesParams {
 	return db.OrderEventPayloadMatchesParams{
-		EventID:         param.EventID,
-		CommandID:       param.CommandID,
-		CommandSequence: param.CommandSequence,
-		EventIndex:      param.EventIndex,
-		OrderID:         param.OrderID,
-		UserID:          param.UserID,
-		Ticker:          param.Ticker,
-		EventType:       param.EventType,
-		Reason:          param.Reason,
-		OrderType:       param.OrderType,
-		Side:            param.Side,
-		PreviousPrice:   param.PreviousPrice,
-		Price:           param.Price,
-		PreviousAmount:  param.PreviousAmount,
-		FilledAmount:    param.FilledAmount,
-		CanceledAmount:  param.CanceledAmount,
-		RemainingAmount: param.RemainingAmount,
-		OccurredAt:      param.OccurredAt,
+		EventID:             param.EventID,
+		CommandID:           param.CommandID,
+		CommandSequence:     param.CommandSequence,
+		EventIndex:          param.EventIndex,
+		OrderID:             param.OrderID,
+		UserID:              param.UserID,
+		Ticker:              param.Ticker,
+		EventType:           param.EventType,
+		Reason:              param.Reason,
+		OrderType:           param.OrderType,
+		Side:                param.Side,
+		PreviousPriceTicks:  param.PreviousPriceTicks,
+		PriceTicks:          param.PriceTicks,
+		PreviousAmountLots:  param.PreviousAmountLots,
+		FilledAmountLots:    param.FilledAmountLots,
+		CanceledAmountLots:  param.CanceledAmountLots,
+		RemainingAmountLots: param.RemainingAmountLots,
+		MarketConfigVersion: param.MarketConfigVersion,
+		OccurredAt:          param.OccurredAt,
 	}
 }

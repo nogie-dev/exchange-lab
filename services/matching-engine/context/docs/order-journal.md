@@ -6,6 +6,7 @@ Core files:
 - `internal/journal/postgres/store.go`
 - `internal/journal/postgres/db`
 - `db/migrations/00003_create_order_journal.sql`
+- `db/migrations/00007_add_journal_config_version.sql`
 - `db/query/order_journal.sql`
 - `internal/engine/bookworker.go`
 - `cmd/server/main.go`
@@ -25,6 +26,9 @@ Core files:
   generated order timestamps and match execution IDs remain deterministic.
 - API command success is returned only after journal append, command handling,
   and any match-log commit acknowledgement complete.
+- Journal payloads contain canonical integer price/quantity units rather than
+  the original decimal strings. Each row stores `market_config_version` so
+  replay cannot silently apply a different precision contract.
 
 ## Startup Recovery
 

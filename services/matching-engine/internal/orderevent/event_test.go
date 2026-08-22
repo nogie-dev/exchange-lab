@@ -2,10 +2,12 @@ package orderevent
 
 import (
 	"errors"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/nogie-dev/clob-trading/internal/models"
+	"github.com/nogie-dev/clob-trading/internal/numeric"
 )
 
 func TestGenerateEventIDIsStableAndTransitionSpecific(t *testing.T) {
@@ -65,12 +67,12 @@ func testEvent(eventType Type, previous, filled, canceled, remaining float64) Ev
 		Reason:          ReasonNone,
 		OrderType:       models.Limit,
 		Side:            models.Bid,
-		PreviousPrice:   100,
-		Price:           100,
-		PreviousAmount:  previous,
-		FilledAmount:    filled,
-		CanceledAmount:  canceled,
-		RemainingAmount: remaining,
+		PreviousPrice:   numeric.MustPrice("100"),
+		Price:           numeric.MustPrice("100"),
+		PreviousAmount:  numeric.MustQuantity(strconv.FormatFloat(previous, 'f', -1, 64)),
+		FilledAmount:    numeric.MustQuantity(strconv.FormatFloat(filled, 'f', -1, 64)),
+		CanceledAmount:  numeric.MustQuantity(strconv.FormatFloat(canceled, 'f', -1, 64)),
+		RemainingAmount: numeric.MustQuantity(strconv.FormatFloat(remaining, 'f', -1, 64)),
 		OccurredAt:      time.Date(2026, 8, 13, 12, 0, 0, 0, time.UTC),
 	}
 	event.EventID = GenerateEventID(event.Ticker, event.CommandID, event.OrderID, event.Type, event.EventIndex)

@@ -1,6 +1,9 @@
 package testdata
 
-import "github.com/nogie-dev/clob-trading/internal/models"
+import (
+	"github.com/nogie-dev/clob-trading/internal/models"
+	"github.com/nogie-dev/clob-trading/internal/numeric"
+)
 
 var SampleOrders = []models.CreateOrderRequest{
 	// Bids
@@ -9,8 +12,8 @@ var SampleOrders = []models.CreateOrderRequest{
 		UserID:    "nogie",
 		OrderType: models.Limit,
 		Position:  models.Bid,
-		Price:     96536.2,
-		Amount:    0.05,
+		Price:     numeric.MustPrice("96536.2"),
+		Amount:    numeric.MustQuantity("0.05"),
 		Nonce:     1,
 	},
 	{
@@ -18,8 +21,8 @@ var SampleOrders = []models.CreateOrderRequest{
 		UserID:    "alice",
 		OrderType: models.Limit,
 		Position:  models.Bid,
-		Price:     96535.8,
-		Amount:    0.03,
+		Price:     numeric.MustPrice("96535.8"),
+		Amount:    numeric.MustQuantity("0.03"),
 		Nonce:     1,
 	},
 	{
@@ -27,8 +30,8 @@ var SampleOrders = []models.CreateOrderRequest{
 		UserID:    "bob",
 		OrderType: models.Limit,
 		Position:  models.Bid,
-		Price:     96535.0,
-		Amount:    0.07,
+		Price:     numeric.MustPrice("96535.0"),
+		Amount:    numeric.MustQuantity("0.07"),
 		Nonce:     1,
 	},
 	{
@@ -36,8 +39,8 @@ var SampleOrders = []models.CreateOrderRequest{
 		UserID:    "carol",
 		OrderType: models.Limit,
 		Position:  models.Bid,
-		Price:     96534.5,
-		Amount:    0.02,
+		Price:     numeric.MustPrice("96534.5"),
+		Amount:    numeric.MustQuantity("0.02"),
 		Nonce:     1,
 	},
 	{
@@ -45,8 +48,8 @@ var SampleOrders = []models.CreateOrderRequest{
 		UserID:    "dave",
 		OrderType: models.Limit,
 		Position:  models.Bid,
-		Price:     96533.9,
-		Amount:    0.06,
+		Price:     numeric.MustPrice("96533.9"),
+		Amount:    numeric.MustQuantity("0.06"),
 		Nonce:     1,
 	},
 
@@ -56,8 +59,8 @@ var SampleOrders = []models.CreateOrderRequest{
 		UserID:    "eve",
 		OrderType: models.Limit,
 		Position:  models.Ask,
-		Price:     96536.2,
-		Amount:    0.05,
+		Price:     numeric.MustPrice("96536.2"),
+		Amount:    numeric.MustQuantity("0.05"),
 		Nonce:     1,
 	},
 	{
@@ -65,8 +68,8 @@ var SampleOrders = []models.CreateOrderRequest{
 		UserID:    "frank",
 		OrderType: models.Limit,
 		Position:  models.Ask,
-		Price:     96537.0,
-		Amount:    0.04,
+		Price:     numeric.MustPrice("96537.0"),
+		Amount:    numeric.MustQuantity("0.04"),
 		Nonce:     1,
 	},
 	{
@@ -74,8 +77,8 @@ var SampleOrders = []models.CreateOrderRequest{
 		UserID:    "grace",
 		OrderType: models.Limit,
 		Position:  models.Ask,
-		Price:     96537.8,
-		Amount:    0.03,
+		Price:     numeric.MustPrice("96537.8"),
+		Amount:    numeric.MustQuantity("0.03"),
 		Nonce:     1,
 	},
 	{
@@ -83,8 +86,8 @@ var SampleOrders = []models.CreateOrderRequest{
 		UserID:    "heidi",
 		OrderType: models.Limit,
 		Position:  models.Ask,
-		Price:     96538.5,
-		Amount:    0.02,
+		Price:     numeric.MustPrice("96538.5"),
+		Amount:    numeric.MustQuantity("0.02"),
 		Nonce:     1,
 	},
 	{
@@ -92,8 +95,8 @@ var SampleOrders = []models.CreateOrderRequest{
 		UserID:    "heidi",
 		OrderType: models.Limit,
 		Position:  models.Ask,
-		Price:     96538.5,
-		Amount:    1.02,
+		Price:     numeric.MustPrice("96538.5"),
+		Amount:    numeric.MustQuantity("1.02"),
 		Nonce:     2,
 	},
 	{
@@ -101,8 +104,8 @@ var SampleOrders = []models.CreateOrderRequest{
 		UserID:    "heidi",
 		OrderType: models.Limit,
 		Position:  models.Ask,
-		Price:     96538.5,
-		Amount:    4.02,
+		Price:     numeric.MustPrice("96538.5"),
+		Amount:    numeric.MustQuantity("4.02"),
 		Nonce:     3,
 	},
 	{
@@ -110,8 +113,8 @@ var SampleOrders = []models.CreateOrderRequest{
 		UserID:    "ivan",
 		OrderType: models.Limit,
 		Position:  models.Ask,
-		Price:     96539.3,
-		Amount:    0.06,
+		Price:     numeric.MustPrice("96539.3"),
+		Amount:    numeric.MustQuantity("0.06"),
 		Nonce:     1,
 	},
 }

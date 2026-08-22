@@ -7,6 +7,13 @@ Core files:
 - `internal/engine/order.go`
 - `internal/models/order.go`
 
+Numeric contract:
+
+- `PriceTicks` and `QuantityLots` are signed `int64` fixed-point units.
+- Price crossing and quantity subtraction use exact integer comparisons.
+- A `MatchLog` carries quote atoms and the market configuration version used
+  for the execution.
+
 Invariants:
 
 - Limit bids match while incoming bid price is greater than or equal to best ask.
