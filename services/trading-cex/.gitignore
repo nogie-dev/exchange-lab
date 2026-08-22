@@ -1,0 +1,7 @@
+# Local build/test artifacts
+tmp/
+
+# Go test binaries
+*.test
+
+__pycache__/
